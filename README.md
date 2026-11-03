@@ -93,4 +93,4 @@ de IBM Skills Network. La primera versión de este repo eran esqueletos simulado
 patrones; esta versión los reimplementa sobre LangGraph como un proyecto con pruebas, trazas y
 evals.
 
-Licencia MIT.
+Fernando León Moloney - Licencia MIT.
