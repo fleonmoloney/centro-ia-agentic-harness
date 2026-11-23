@@ -4,8 +4,7 @@ Harness agéntico de referencia en Python: la capa de control que rodea a un LLM
 **acotado en costo, supervisable por personas, integrable con sistemas institucionales y
 evaluable con modelos reales de forma reproducible**.
 
-Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verificado y lo que no
-está dicho abajo, sin adornos.
+Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verificado y lo que no.
 
 ## Qué incluye
 
@@ -21,7 +20,7 @@ está dicho abajo, sin adornos.
 | **Trazas** | Un evento por llamada con latencia y tokens, marcados como `provider` o `estimated`. | `tracing.py` |
 | **Evals** | Suite determinista (compuerta de CI) y suite con modelo real, con intervalos de Wilson, códigos de salida y comparador entre modelos. | `evals.py`, `compare.py` |
 | **Integraciones** | BeeAI, AG2 y CrewAI (extras opcionales): sus herramientas pasan por la misma puerta HITL. Ver ADR-012 para el alcance exacto. | `integrations/` |
-| **Modelo simulado** | Servidor de juguete para probar el camino de evaluación sin GPU. **No mide nada.** | `mockmodel.py` |
+| **Modelo simulado** | Servidor simulado para probar el camino de evaluación sin GPU. **No mide nada.** | `mockmodel.py` |
 | **Economía de la inferencia** | Modelo analítico (no medición) de asignación de herramientas. | `cost_model.py` |
 
 ## Cómo correrlo
