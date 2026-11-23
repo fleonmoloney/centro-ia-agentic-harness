@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "centro-ia-agentic-harness"
+version = "0.3.0"
+description = "Harness agéntico de referencia: lazo de agente, supervisión humana (HITL), presupuesto, salidas estructuradas, trazas y evals con modelos reales."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Fernando León Moloney" }]
+dependencies = [
+    "langgraph>=1.0,<2",
+    "langchain-core>=1.0,<2",
+    "pydantic>=2.7,<3",
+]
+
+[project.optional-dependencies]
+openai = ["langchain-openai>=1.0,<2"]
+persist = ["langgraph-checkpoint-sqlite>=2,<4"]
+local = ["torch", "transformers>=4.45", "accelerate", "bitsandbytes"]
+dev = ["pytest>=8", "ruff>=0.6", "langgraph-checkpoint-sqlite>=2,<4"]
+
+[project.scripts]
+harness-evals = "centro_harness.evals:main"
+harness-compare = "centro_harness.compare:main"
+harness-mockmodel = "centro_harness.mockmodel:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
