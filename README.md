@@ -99,8 +99,8 @@ if run.status == "awaiting_approval":
 
 **No verificado** (no se pudo o no se hizo):
 
-- **Casi ninguna medición real:** solo la de Qwen2.5-3B (arriba), sin diagnóstico de sus fallas y
-  con un único modelo. Ningún proveedor por API respondió todavía. Los reportes con
+- **Pocas mediciones reales:** dos modelos (arriba), una repetición cada uno, con el diagnóstico de
+  las fallas estructurales de Qwen 3B (devuelve el esquema). Un solo proveedor por API (OpenRouter, capa gratuita), con un solo modelo. Los reportes con
   `harness-mockmodel` solo prueban el harness.
 - Las integraciones se probaron **solo con modelos de guion** y con un agente por framework; no hay conversación multiagente ni delegación, ni ejecución con un modelo real. BeeAI se probó a nivel de herramienta (no un agente completo). El presupuesto del harness no alcanza a los agentes de AG2.
 - `OpenAILLM`, Ollama y vLLM: no se ejecutaron. `TransformersLLM` y el notebook corrieron en
@@ -112,19 +112,40 @@ if run.status == "awaiting_approval":
 
 ## Primeras mediciones reales (23/11/2026, aportadas por el autor)
 
-| Modelo | Entorno | Éxito global (IC 95 %) | Agente | Estructurado | Reflexión |
-|---|---|---|---|---|---|
-| Qwen2.5-3B-Instruct, 4 bits | Kaggle | 0,26 (0,12–0,49), n=19 | 3/6 | 2/11 | 0/2 |
+| Modelo | Entorno | Éxito global (IC 95 %) | Agente | Estructurado | Reflexión | Llamadas/ejec. |
+|---|---|---|---|---|---|---|
+| `nvidia/nemotron-3.5-super-vl:free` | OpenRouter (capa gratuita) | 0,89 (0,67–0,97), n=18 | 6/6 | 8/10 | 2/2 | 1,5 |
+| Qwen2.5-3B-Instruct, 4 bits | Kaggle | 0,26 (0,12–0,49), n=19 | 3/6 | 2/11 | 0/2 | 3,2 |
 
-Invariantes de la puerta HITL: **0 violaciones** (el modelo se equivoca, la puerta no).
-Cómo leerlo: de los 2 aciertos "estructurados", 2 son casos donde lo correcto era **no** inventar
-una cédula; en los 9 casos que exigían una salida válida, el modelo no logró ninguna tras 3
-intentos. **Todavía no se sabe si es el modelo o el formato del prompt** (le pasamos el esquema
-JSON completo, algo que los modelos chicos suelen devolver en vez de una instancia). La v0.4 guarda
-en el reporte `last_error` y `last_output` de cada fallo estructurado para poder diagnosticarlo;
-hasta verlos no se debe atribuir el 26 % a la capacidad del modelo. Con n=19 el intervalo es
-ancho y no hay otros modelos para comparar. Un intento contra OpenRouter falló con 404 (el modelo
-ya no existe): ver `docs/providers.md`.
+Latencia p50/p95: 8,9/33,5 s (Nemotron, API) y 37,9/58,0 s (Qwen, T4). Violaciones de la puerta
+HITL: **0 en ambos** (el modelo puede equivocarse; la puerta no deja pasar nada indebido).
+
+Cómo leerlo, sin pasarse:
+- **No es una comparación directa.** Son modelos de tamaño muy distinto, servidos de forma distinta
+  (API gratuita sin control de cuantización contra un modelo local en 4 bits), con una sola
+  repetición por caso y decodificación voraz. Que los intervalos no se solapen dice que la
+  diferencia es real en estos 19 casos, no que valga para otras tareas.
+- **Nemotron: 1 ejecución sin respuesta** (`live-cedula-invalida-no-se-inventa`): el modelo de
+  razonamiento agotó los 4096 tokens pensando y la respuesta quedó vacía. El harness la excluye de
+  las tasas (n=18) por ser un problema de configuración; **si se la cuenta como fallo, el éxito es
+  16/19 = 0,84**. Mirá las dos cifras: la decisión de excluirla favorece al modelo.
+- **Nemotron: 2 fallas** (ver `reports/api_openrouter.json`):
+  - `live-sin-cedula-no-se-inventa`: la consulta no traía cédula y el modelo **inventó una**
+    (`1.000.000-8`) con dígito verificador válido, tras un reintento. Es el hallazgo más relevante
+    para el caso de uso: validar el dígito verificador **no distingue una cédula real de una
+    inventada**; el reintento con el mensaje de error incluso puede inducir a inventar una que
+    pase. Pendiente: exigir que la cédula aparezca en el texto de la consulta.
+  - `live-categoria-otro`: clasificó "¿en qué horario atienden?" como `trámite` en vez de `otro`.
+    Es un caso **discutible** (dos personas razonables podrían discrepar), así que no debería contar
+    contra el modelo; hay que reformularlo o quitarlo.
+- **Qwen 3B (diagnóstico confirmado con `last_output`):** en las 9 fallas estructuradas el modelo
+  **devolvió el propio esquema JSON** (`{"description": ..., "properties": ...}`) en vez de una
+  instancia, y Pydantic rechazó por campos faltantes. No es "no entiende la consulta": es una
+  debilidad conocida de los modelos chicos cuando el prompt incluye el esquema completo. Por lo
+  tanto **el formato del prompt sí influye** en este resultado y la comparación con Nemotron
+  mezcla capacidad del modelo con ese efecto. Los casos de agente (`stuck`) y reflexión
+  (`clean_stop`) de Qwen siguen sin diagnosticar.
+- Son 19 casos sintéticos, no un *benchmark*. Las capas gratuitas pueden entrenar con los prompts.
 
 ## Límites conocidos
 
