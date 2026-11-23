@@ -4,7 +4,8 @@ Harness agéntico de referencia en Python: la capa de control que rodea a un LLM
 **acotado en costo, supervisable por personas, integrable con sistemas institucionales y
 evaluable con modelos reales de forma reproducible**.
 
-Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verificado y lo que no.
+Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verificado y lo que no
+está dicho abajo, sin adornos.
 
 ## Qué incluye
 
@@ -19,6 +20,7 @@ Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verif
 | **Backends de modelo** | `OpenAICompatLLM` (vLLM, Ollama, llama.cpp o APIs; solo biblioteca estándar; tokens reales; modelos de razonamiento; límites de velocidad y cuota), `TransformersLLM` (Colab/Kaggle), `OpenAILLM`, `ScriptedLLM` (pruebas). | `llm.py` |
 | **Trazas** | Un evento por llamada con latencia y tokens, marcados como `provider` o `estimated`. | `tracing.py` |
 | **Evals** | Suite determinista (compuerta de CI) y suite con modelo real, con intervalos de Wilson, códigos de salida y comparador entre modelos. | `evals.py`, `compare.py` |
+| **Integraciones** | BeeAI, AG2 y CrewAI (extras opcionales): sus herramientas pasan por la misma puerta HITL. Ver ADR-012 para el alcance exacto. | `integrations/` |
 | **Modelo simulado** | Servidor de juguete para probar el camino de evaluación sin GPU. **No mide nada.** | `mockmodel.py` |
 | **Economía de la inferencia** | Modelo analítico (no medición) de asignación de herramientas. | `cost_model.py` |
 
@@ -84,25 +86,45 @@ if run.status == "awaiting_approval":
 
 **Verificado en este entorno** (Linux, Python 3.13):
 
-- 131 pruebas y `ruff` en verde; 29 de 29 casos deterministas.
+- 137 pruebas y `ruff` en verde (con los extras de frameworks instalados; sin ellos se omiten las pruebas de integración); 29 de 29 casos deterministas.
 - **Prueba de mutación:** se rompió a propósito la puerta HITL (aprobar todo), el tope de pasos y
   el enmascarado recursivo; la suite detecta las tres (la puerta rota sale con código 2).
 - Cliente HTTP, modelos de razonamiento, `Retry-After`, espaciado de peticiones, cuota agotada y
   reporte parcial: **contra servidores HTTP simulados** en un hilo (no mocks de `urllib`).
+- Integraciones: con un agente real de AG2, un equipo real de CrewAI y las herramientas de BeeAI, una acción de riesgo alto queda pendiente y nada se ejecuta sin aprobación; si el adaptador salta la puerta, las pruebas fallan. Se instalaron juntos sin conflictos (`pip check`) en Python 3.13.
 - Persistencia: una solicitud pausada sobrevive a un reinicio con SQLite, y el agente retoma
   desde la corrida serializada.
+- **Reportado por el autor, v0.3.0** (con capturas de pantalla del 22/11/2026): en **Windows** (cmd) la suite live contra `harness-mockmodel` dio 19/19 y 0 violaciones de invariante, así que el camino HTTP y el servidor simulado funcionan allí; en **GitHub Codespaces** `docker build` y `docker run` se completaron y mostraron el reporte de evals. Además, según el autor, las pruebas pasaron en su equipo y en Colab (sin captura). Falta anotar la versión de Python en cada entorno, y nada de esto incluye las integraciones de la v0.4. El 19/19 contra el modelo simulado prueba el harness, no un modelo.
 - Las fallas que motivaron la v0.3 se reprodujeron antes de corregirlas (ADR-007).
 
 **No verificado** (no se pudo o no se hizo):
 
-- **Ningún proveedor ni modelo real.** No hay números de calidad de ningún modelo en este repo.
-  Los reportes con `harness-mockmodel` solo prueban el harness.
-- `TransformersLLM`, `OpenAILLM`, Ollama, vLLM y el notebook: no se ejecutaron (sin GPU ni acceso
-  a Hugging Face en el entorno de desarrollo).
-- Python 3.10, 3.11 y 3.12, Windows, la imagen Docker y el CI de GitHub: solo se probó 3.13 en
-  Linux. El CI de este repo es el que debe confirmar el resto.
+- **Casi ninguna medición real:** solo la de Qwen2.5-3B (arriba), sin diagnóstico de sus fallas y
+  con un único modelo. Ningún proveedor por API respondió todavía. Los reportes con
+  `harness-mockmodel` solo prueban el harness.
+- Las integraciones se probaron **solo con modelos de guion** y con un agente por framework; no hay conversación multiagente ni delegación, ni ejecución con un modelo real. BeeAI se probó a nivel de herramienta (no un agente completo). El presupuesto del harness no alcanza a los agentes de AG2.
+- `OpenAILLM`, Ollama y vLLM: no se ejecutaron. `TransformersLLM` y el notebook corrieron en
+  Kaggle (reporte del autor), solo con Qwen2.5-3B en 4 bits.
+- Python 3.10, 3.11 y 3.12, la suite completa de pruebas en Windows y el CI de GitHub: en el entorno de desarrollo solo se probó
+  3.13 en Linux. El CI de este repo es el que debe confirmar el resto.
 - Formato real de los encabezados de límite de cada proveedor (el cliente los interpreta con
   mejor esfuerzo).
+
+## Primeras mediciones reales (23/11/2026, aportadas por el autor)
+
+| Modelo | Entorno | Éxito global (IC 95 %) | Agente | Estructurado | Reflexión |
+|---|---|---|---|---|---|
+| Qwen2.5-3B-Instruct, 4 bits | Kaggle | 0,26 (0,12–0,49), n=19 | 3/6 | 2/11 | 0/2 |
+
+Invariantes de la puerta HITL: **0 violaciones** (el modelo se equivoca, la puerta no).
+Cómo leerlo: de los 2 aciertos "estructurados", 2 son casos donde lo correcto era **no** inventar
+una cédula; en los 9 casos que exigían una salida válida, el modelo no logró ninguna tras 3
+intentos. **Todavía no se sabe si es el modelo o el formato del prompt** (le pasamos el esquema
+JSON completo, algo que los modelos chicos suelen devolver en vez de una instancia). La v0.4 guarda
+en el reporte `last_error` y `last_output` de cada fallo estructurado para poder diagnosticarlo;
+hasta verlos no se debe atribuir el 26 % a la capacidad del modelo. Con n=19 el intervalo es
+ancho y no hay otros modelos para comparar. Un intento contra OpenRouter falló con 404 (el modelo
+ya no existe): ver `docs/providers.md`.
 
 ## Límites conocidos
 
@@ -126,20 +148,22 @@ if run.status == "awaiting_approval":
 - **Sin *streaming* ni llamadas nativas a herramientas:** el agente usa JSON en texto, validado.
 - **Los tokens son reales solo si el backend los informa**; si no, son estimaciones.
 - **`cost_model.py` es un modelo, no una medición.**
-- Solo se usan `langgraph`, `langchain-core` y `pydantic`; CrewAI, BeeAI y AG2 no son
-  dependencias (la conversación multiagente no está implementada).
+- El núcleo usa solo `langgraph`, `langchain-core` y `pydantic`. BeeAI, AG2 y CrewAI son extras
+  opcionales (`pip install -e ".[frameworks]"`, Python 3.11-3.13). La conversación entre varios
+  agentes no está implementada.
 
 ## Estructura
 
 ```
 src/centro_harness/   agent · hitl · budget · reflection · schemas · jsonutil · llm · tracing
                       evals · compare · mockmodel · cost_model
+                      integrations/ (beeai · ag2 · crewai)
 evals/cases.jsonl     29 casos deterministas (CI)
 evals/live_cases.jsonl  19 casos con modelo real
-tests/                131 pruebas
-docs/                 architecture.md (ADR 001-011) · evals.md · providers.md
+tests/                137 pruebas
+docs/                 architecture.md (ADR 001-012) · evals.md · providers.md
 notebooks/            live_eval_colab_kaggle.ipynb
-.github/workflows/    CI: ruff + pytest + evals + imagen Docker
+.github/workflows/    CI: ruff + pytest + evals + imagen Docker + job frameworks
 ```
 
 ## Origen

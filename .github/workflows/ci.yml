@@ -43,3 +43,16 @@ jobs:
         run: docker build -t centro-harness .
       - name: Correr los evals dentro de la imagen
         run: docker run --rm centro-harness
+
+  frameworks:
+    # Integraciones BeeAI / AG2 / CrewAI (requieren Python 3.11-3.13). Las pruebas usan modelos
+    # de guion: validan que la puerta HITL manda dentro de cada framework, no su calidad.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,frameworks]"
+      - run: pip check
+      - run: pytest tests/test_integrations.py -p no:warnings

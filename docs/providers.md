@@ -19,6 +19,12 @@ python -m centro_harness.compare reports/*.json --out-md reports/comparacion.md
 > secundarias consultadas el 22/11/2026; los planes gratuitos cambian sin aviso. Confirmá cada
 > dato en el sitio oficial antes de apoyarte en él.
 
+> **Primera medición real (23/11/2026):** `nvidia/nemotron-nano-9b-v2:free`, tomado de un listado
+> secundario, devolvió 404 ("no longer available"). El harness lo registró como error de
+> infraestructura (19 casos excluidos de las tasas), que es lo correcto. Antes de gastar cuota,
+> confirmá el ID en el catálogo vivo del proveedor (en OpenRouter, `GET /api/v1/models`: los
+> gratuitos terminan en `:free`). Un solo caso alcanza para probar un ID: `--only salud`.
+
 ## Cuánto cuesta una pasada (la cuenta que condiciona todo)
 
 Una pasada de `evals/live_cases.jsonl` (19 casos, `--repeats 1`) usa **al menos ~31 llamadas y
@@ -34,7 +40,7 @@ Preferí agregar casos (variedad) antes que repeticiones.
 | Opción | Modelos de tu lista | Límites (según las fuentes) | Datos |
 |---|---|---|---|
 | **Local / Colab / Kaggle** con pesos abiertos (transformers, vLLM, Ollama) | Los que entren en tu GPU. Una T4 de 16 GB no aloja un modelo de ~30B ni en 4 bits (solo los pesos serían ~15 GB) | Sin cuota. Reproducible: controlás versión y cuantización | No salen de tu máquina |
-| **OpenRouter**, modelos con sufijo `:free` | Vistos en un listado secundario (pueden haber cambiado): `nvidia/nemotron-3-nano-30b-a3b:free`, `nvidia/nemotron-nano-9b-v2:free`, `qwen/qwen3-next-80b-a3b-instruct:free`, `qwen/qwen3-4b:free`, `z-ai/glm-4.5-air:free`, `openai/gpt-oss-120b:free`. DeepSeek y Kimi no figuraban como gratis | 20 pedidos/min. **50 pedidos/día**, o 1 000/día si compraste al menos 10 créditos. **La cuota es una sola para todos los modelos gratis** | Depende del proveedor que sirve cada modelo; algunos pueden entrenar con tus prompts |
+| **OpenRouter**, modelos con sufijo `:free` | Vistos en un listado secundario (pueden haber cambiado): `nvidia/nemotron-3-nano-30b-a3b:free`, ~~`nvidia/nemotron-nano-9b-v2:free`~~ (**404 el 23/11/2026: ya no lo sirve ningún proveedor**), `qwen/qwen3-next-80b-a3b-instruct:free`, `qwen/qwen3-4b:free`, `z-ai/glm-4.5-air:free`, `openai/gpt-oss-120b:free`. DeepSeek y Kimi no figuraban como gratis | 20 pedidos/min. **50 pedidos/día**, o 1 000/día si compraste al menos 10 créditos. **La cuota es una sola para todos los modelos gratis** | Depende del proveedor que sirve cada modelo; algunos pueden entrenar con tus prompts |
 | **NVIDIA API Catalog** (build.nvidia.com) | Familia Nemotron y otros | Sin cifra oficial publicada. Usuarios del foro de NVIDIA mencionan ~40 pedidos/min. Uso orientado a prototipado/desarrollo; un usuario afirma que la producción está prohibida por los términos | No consta en las fuentes consultadas |
 | **Z.ai (GLM)** | `GLM-4.7-Flash`, `GLM-4.5-Flash`, `GLM-4.6V-Flash` | No publicados; figuran en la consola con sesión iniciada | No entrena salvo que lo aceptes |
 | **Alibaba Model Studio (Qwen)** | Qwen | Crédito de 1 M de tokens por modelo, 90 días, solo región Singapur. **Después de la cuota empieza a facturar automáticamente salvo que actives "Free Quota Only"**, que viene apagado | No entrena sin consentimiento aparte |

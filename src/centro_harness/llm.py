@@ -80,13 +80,15 @@ def schema_prompt(prompt: str, schema: type[BaseModel]) -> str:
     )
 
 
-def structured_from_text(generate, prompt: str, schema: type[T]) -> T:
+def structured_from_text(generate, prompt: str, schema: type[T], record=None) -> T:
     """Pide JSON como texto, lo extrae y lo valida. Lanza `ValueError` si no sirve.
 
     Es el camino de los modelos locales: no hay garantía de formato, por eso el resultado
     siempre pasa por Pydantic y, si falla, por el bucle de reparación.
     """
     text = generate(schema_prompt(prompt, schema))
+    if record is not None:
+        record(text)  # para diagnosticar: qué devolvió realmente el modelo
     return schema.model_validate(extract_json(text))
 
 
@@ -279,7 +281,10 @@ class OpenAICompatLLM:
 
     def structured(self, prompt: str, schema: type[T], *, label: str = "") -> T:
         return structured_from_text(
-            lambda p: self._complete(p, json_mode=self.json_mode), prompt, schema
+            lambda p: self._complete(p, json_mode=self.json_mode),
+            prompt,
+            schema,
+            record=lambda t: setattr(self, "last_text", t),
         )
 
 
@@ -352,7 +357,9 @@ class TransformersLLM:
         return self._tok.decode(new_tokens, skip_special_tokens=True)
 
     def structured(self, prompt: str, schema: type[T], *, label: str = "") -> T:
-        return structured_from_text(self.generate, prompt, schema)
+        return structured_from_text(
+            self.generate, prompt, schema, record=lambda t: setattr(self, "last_text", t)
+        )
 
 
 class OpenAILLM:

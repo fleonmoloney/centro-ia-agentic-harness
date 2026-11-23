@@ -93,6 +93,10 @@ class _CappedLLM:
     def last_usage(self):
         return getattr(self._inner, "last_usage", None)
 
+    @property
+    def last_text(self):
+        return getattr(self._inner, "last_text", None)
+
     def _tick(self) -> None:
         if self.calls >= self._cap:
             raise CallCapReached(f"Tope global de {self._cap} llamadas alcanzado")
@@ -204,8 +208,13 @@ def _run_structured(case: dict, shared_llm: LLM | None) -> tuple[dict, Tracer]:
             llm, case["prompt"], schema, max_attempts=case.get("max_attempts", 3)
         )
         actual = {"ok": True, **obj.model_dump()}
-    except StructuredOutputError:
-        actual = {"ok": False}
+    except StructuredOutputError as exc:
+        # Diagnóstico: por qué falló y qué devolvió el modelo (recortado). No entra en las tasas.
+        actual = {
+            "ok": False,
+            "last_error": exc.last_error[:300],
+            "last_output": str(getattr(inner, "last_text", "") or "")[:400],
+        }
     actual["attempts"] = tracer.calls
     return actual, tracer
 
@@ -551,6 +560,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Corre los evals del harness.")
     parser.add_argument("--cases", default="evals/cases.jsonl")
     parser.add_argument(
+        "--only", default=None, help="Corre solo los casos cuyo id contiene este texto"
+    )
+    parser.add_argument(
         "--llm", choices=["scripted", "compat", "transformers", "openai"], default="scripted"
     )
     parser.add_argument("--base-url", help="Servidor OpenAI-compatible (vLLM, Ollama, ...)")
@@ -589,6 +601,10 @@ def main(argv: list[str] | None = None) -> int:
     repeats = max(1, args.repeats) if mode == "live" else 1
 
     cases = load_cases(args.cases)
+    if args.only:
+        cases = [c for c in cases if args.only in c["id"]]
+        if not cases:
+            parser.error(f"--only {args.only!r}: ningún caso coincide")
     results: list[CaseResult] = []
     aborted = ""
     try:

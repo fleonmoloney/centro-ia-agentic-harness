@@ -168,3 +168,15 @@ def test_infrastructure_failure_is_an_error_not_a_model_failure(mock_url, tmp_pa
     assert code == 2
     assert data["summary"]["errors"] > 0
     assert data["summary"]["failed"] == 0  # un servidor caído no cuenta como "el modelo falló"
+
+
+def test_only_filter_runs_just_the_matching_cases(tmp_path, capsys):
+    from centro_harness.evals import main
+
+    out = tmp_path / "r.json"
+    code = main(["--cases", "evals/cases.jsonl", "--only", "agente", "--out-json", str(out)])
+    import json
+
+    summary = json.loads(out.read_text(encoding="utf-8"))["summary"]
+    assert code == 0
+    assert 0 < summary["total"] < 29

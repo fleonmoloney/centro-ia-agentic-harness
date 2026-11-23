@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "centro-ia-agentic-harness"
-version = "0.3.0"
+version = "0.4.0"
 description = "Harness agéntico de referencia: lazo de agente, supervisión humana (HITL), presupuesto, salidas estructuradas, trazas y evals con modelos reales."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,10 @@ dependencies = [
 [project.optional-dependencies]
 openai = ["langchain-openai>=1.0,<2"]
 persist = ["langgraph-checkpoint-sqlite>=2,<4"]
+beeai = ["beeai-framework>=0.1.80"]
+ag2 = ["ag2>=1.3"]
+crewai = ["crewai>=1.15,<2"]
+frameworks = ["beeai-framework>=0.1.80", "ag2>=1.3", "crewai>=1.15,<2"]
 local = ["torch", "transformers>=4.45", "accelerate", "bitsandbytes"]
 dev = ["pytest>=8", "ruff>=0.6", "langgraph-checkpoint-sqlite>=2,<4"]
 
