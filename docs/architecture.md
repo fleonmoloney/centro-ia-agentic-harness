@@ -98,3 +98,24 @@ del modelo.
 conclusiones falsas con aspecto de datos.
 **Verificación de la suite:** se hizo una prueba de mutación (romper a propósito la puerta, el
 tope de pasos y el enmascarado recursivo) y la suite detecta las tres.
+
+## ADR-012: Frameworks ajenos detrás de la misma puerta (v0.4)
+**Decisión:** BeeAI, AG2 y CrewAI se integran como extras opcionales (`integrations/`). El framework
+razona y conversa; **toda herramienta que ejecuta pasa por `HITLGate`**, y el resultado que ve el
+modelo lo arma una función común (`describe_outcome`). Un riesgo alto queda PENDIENTE hasta que una
+persona llama a `gate.resume(...)`, igual que con LangGraph.
+**Alcance real, por framework:**
+- *BeeAI*: `Tool` por cada herramienta del registro. Probado ejecutando las herramientas; no se
+  corrió un agente de BeeAI completo (haría falta un `ChatModel` propio).
+- *AG2 1.x*: es una reescritura (`ag2.Agent`); la API clásica de AutoGen (`ConversableAgent`) ya
+  no existe. Probado con un `Agent` real y `TestConfig`. El modelo es el cliente propio de AG2, así
+  que **el presupuesto del harness no lo alcanza**.
+- *CrewAI*: `BaseTool` por herramienta y `HarnessCrewLLM`, que hace que el equipo use un LLM del
+  harness; así el `Budget` y las trazas **sí** cortan el equipo. Probado con un `Crew` real
+  (un agente, ReAct en texto).
+**Lo que no se hizo:** conversación entre varios agentes ni delegación (los tests usan un solo
+agente por framework), ni ejecución con un modelo real. Las pruebas de integración usan modelos de
+guion: validan el control, no la calidad. Las APIs de estos frameworks cambian seguido; las
+versiones mínimas están en `pyproject.toml` y el CI corre un job `frameworks` (Python 3.12).
+**Verificación:** prueba de mutación: si las herramientas llaman al registro sin pasar por la
+puerta, las pruebas de los tres adaptadores fallan.

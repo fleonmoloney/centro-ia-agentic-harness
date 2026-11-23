@@ -163,3 +163,30 @@ def test_infrastructure_failure_is_not_swallowed_by_the_repair_loop(serve):
     with pytest.raises(LLMError):
         structured_with_retry(_llm(url, retries=0), "x", InstitutionalTicket)
     assert len(srv.requests) == 1
+
+
+def test_failed_structured_case_reports_why_and_what_the_model_said():
+    from centro_harness.evals import run_case
+
+    case = {
+        "id": "x", "type": "structured", "schema": "InstitutionalTicket", "live": True,
+        "prompt": "Consulta", "expect": {"ok": True},
+    }
+
+    class Charlatan:
+        last_text = None
+
+        def generate(self, prompt, *, label=""):
+            return "Claro, acá tenés la respuesta"
+
+        def structured(self, prompt, schema, *, label=""):
+            from centro_harness.llm import structured_from_text
+
+            return structured_from_text(
+                self.generate, prompt, schema, record=lambda t: setattr(self, "last_text", t)
+            )
+
+    res = run_case(case, mode="live", shared_llm=Charlatan())
+    assert res.status == "fail"
+    assert "Claro, acá tenés" in res.actual["last_output"]
+    assert res.actual["last_error"]
