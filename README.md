@@ -4,7 +4,8 @@ Harness agéntico de referencia en Python: la capa de control que rodea a un LLM
 **acotado en costo, supervisable por personas, integrable con sistemas institucionales y
 evaluable con modelos reales de forma reproducible**.
 
-Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verificado y lo que no.
+Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verificado y lo que no
+está dicho abajo, sin adornos.
 
 ## Qué incluye
 
@@ -20,7 +21,7 @@ Es un prototipo de arquitectura, no un producto. Lo que hace, lo que está verif
 | **Trazas** | Un evento por llamada con latencia y tokens, marcados como `provider` o `estimated`. | `tracing.py` |
 | **Evals** | Suite determinista (compuerta de CI) y suite con modelo real, con intervalos de Wilson, códigos de salida y comparador entre modelos. | `evals.py`, `compare.py` |
 | **Integraciones** | BeeAI, AG2 y CrewAI (extras opcionales): sus herramientas pasan por la misma puerta HITL. Ver ADR-012 para el alcance exacto. | `integrations/` |
-| **Modelo simulado** | Servidor simulado para probar el camino de evaluación sin GPU. **No mide nada.** | `mockmodel.py` |
+| **Modelo simulado** | Servidor de juguete para probar el camino de evaluación sin GPU. **No mide nada.** | `mockmodel.py` |
 | **Economía de la inferencia** | Modelo analítico (no medición) de asignación de herramientas. | `cost_model.py` |
 
 ## Cómo correrlo
@@ -85,7 +86,7 @@ if run.status == "awaiting_approval":
 
 **Verificado en este entorno** (Linux, Python 3.13):
 
-- 137 pruebas y `ruff` en verde (con los extras de frameworks instalados; sin ellos se omiten las pruebas de integración); 29 de 29 casos deterministas.
+- 150 pruebas y `ruff` en verde (con los extras de frameworks y de SQLite instalados; sin ellos se omiten las que los necesitan); 32 de 32 casos deterministas.
 - **Prueba de mutación:** se rompió a propósito la puerta HITL (aprobar todo), el tope de pasos y
   el enmascarado recursivo; la suite detecta las tres (la puerta rota sale con código 2).
 - Cliente HTTP, modelos de razonamiento, `Retry-After`, espaciado de peticiones, cuota agotada y
@@ -109,7 +110,26 @@ if run.status == "awaiting_approval":
 - Formato real de los encabezados de límite de cada proveedor (el cliente los interpreta con
   mejor esfuerzo).
 
-## Primeras mediciones reales (23/11/2026, aportadas por el autor)
+## Protocolo de medición v2 (v0.5)
+
+Tras diagnosticar las fallas de la primera medición se cambió el protocolo. **Los números de abajo
+son del protocolo v1** y no son comparables con los del v2 (se conservan como línea base: `--prompt-style schema`
+es el valor por defecto).
+
+| Cambio | Motivo (medido) |
+|---|---|
+| `--prompt-style example`: el prompt muestra un objeto de relleno en vez del esquema JSON | Qwen2.5-3B devolvía el esquema en vez de una instancia en 9 de 9 casos estructurados |
+| Anclaje de la cédula (`ci_grounding_check`, casos con `"grounded": true`): la cédula extraída debe figurar en la consulta | Nemotron inventó `1.000.000-8`, que pasa el dígito verificador |
+| `live-categoria-otro` reformulado (una felicitación en vez de "¿qué horario atienden?") | El original era discutible y no debía contar contra el modelo |
+| Respuesta vacía con `max_tokens` ≥ 4096 cuenta como **fallo** (con un tope menor sigue siendo error de configuración) | Excluirla favorecía al modelo (0,89 contra 0,84) |
+
+Verificado: pruebas y casos deterministas para cada cambio, y prueba de mutación (si se desactiva
+el anclaje, fallan la prueba y dos casos del CI). **No verificado con ningún modelo real:** que el
+prompt con ejemplo mejore a Qwen 3B, ni cuántas veces Nemotron intenta inventar la cédula con el
+anclaje activo (el reporte lo cuenta en `grounding_rejections`). Para medirlo hay que volver a
+correr ambos modelos con el v2.
+
+## Primeras mediciones reales (protocolo v1) (23/11/2026, aportadas por el autor)
 
 | Modelo | Entorno | Éxito global (IC 95 %) | Agente | Estructurado | Reflexión | Llamadas/ejec. |
 |---|---|---|---|---|---|---|
@@ -178,10 +198,10 @@ Cómo leerlo, sin pasarse:
 src/centro_harness/   agent · hitl · budget · reflection · schemas · jsonutil · llm · tracing
                       evals · compare · mockmodel · cost_model
                       integrations/ (beeai · ag2 · crewai)
-evals/cases.jsonl     29 casos deterministas (CI)
+evals/cases.jsonl     32 casos deterministas (CI)
 evals/live_cases.jsonl  19 casos con modelo real
-tests/                137 pruebas
-docs/                 architecture.md (ADR 001-012) · evals.md · providers.md
+tests/                150 pruebas
+docs/                 architecture.md (ADR 001-013) · evals.md · providers.md
 notebooks/            live_eval_colab_kaggle.ipynb
 .github/workflows/    CI: ruff + pytest + evals + imagen Docker + job frameworks
 ```

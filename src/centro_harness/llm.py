@@ -36,6 +36,14 @@ class LLMError(RuntimeError):
     """
 
 
+class TruncatedResponse(LLMError):
+    """Respuesta vacía porque el modelo agotó `max_tokens` (típico en modelos de razonamiento)."""
+
+    def __init__(self, message: str, max_tokens: int) -> None:
+        super().__init__(message)
+        self.max_tokens = max_tokens
+
+
 class QuotaExhausted(LLMError):
     """El proveedor agotó la cuota (p. ej. límite diario) o pide esperar más de lo razonable.
 
@@ -71,8 +79,52 @@ def strip_reasoning(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- salida estructurada
-def schema_prompt(prompt: str, schema: type[BaseModel]) -> str:
-    """Agrega al prompt la instrucción y el esquema para que un modelo de texto devuelva JSON."""
+PROMPT_STYLES = ("schema", "example")
+
+
+def _placeholder(prop: dict) -> object:
+    """Valor de relleno de un campo, para mostrar la FORMA de la respuesta (no un esquema)."""
+    if "enum" in prop:
+        return " | ".join(str(v) for v in prop["enum"])
+    kind = prop.get("type")
+    if kind == "boolean":
+        return False
+    if kind in ("integer", "number"):
+        return 0
+    if kind == "array":
+        return []
+    return "<texto>"
+
+
+def example_skeleton(schema: type[BaseModel]) -> dict:
+    """Instancia de relleno del esquema: mismas claves, valores de ejemplo."""
+    props = schema.model_json_schema().get("properties", {})
+    return {name: _placeholder(prop) for name, prop in props.items()}
+
+
+def schema_prompt(prompt: str, schema: type[BaseModel], style: str = "schema") -> str:
+    """Agrega al prompt la instrucción y el formato para que un modelo de texto devuelva JSON.
+
+    * `schema` (protocolo original, v1): incluye el esquema JSON completo. Los modelos chicos
+      suelen devolver el propio esquema en vez de una instancia (medido con Qwen2.5-3B).
+    * `example` (v2): muestra un objeto de relleno con las mismas claves y la lista de campos.
+      No agrega ninguna pista sobre qué hacer si falta un dato: eso lo mide el caso.
+    """
+    if style not in PROMPT_STYLES:
+        raise ValueError(f"estilo de prompt desconocido: {style!r} (opciones: {PROMPT_STYLES})")
+    if style == "example":
+        shape = json.dumps(example_skeleton(schema), ensure_ascii=False, indent=2)
+        fields = "\n".join(
+            f"- {name}: {prop['description']}"
+            for name, prop in schema.model_json_schema().get("properties", {}).items()
+            if prop.get("description")
+        )
+        extra = f"\nSignificado de los campos:\n{fields}" if fields else ""
+        return (
+            f"{prompt}\n\nRespondé SOLO con un objeto JSON válido (sin texto antes ni después) "
+            "con EXACTAMENTE estas claves. Reemplazá los valores de ejemplo por los reales; "
+            f"en los campos con opciones separadas por | elegí una sola:\n{shape}{extra}"
+        )
     spec = json.dumps(schema.model_json_schema(), ensure_ascii=False)
     return (
         f"{prompt}\n\nRespondé SOLO con un objeto JSON válido (sin texto antes ni después) que "
@@ -80,13 +132,15 @@ def schema_prompt(prompt: str, schema: type[BaseModel]) -> str:
     )
 
 
-def structured_from_text(generate, prompt: str, schema: type[T], record=None) -> T:
+def structured_from_text(
+    generate, prompt: str, schema: type[T], record=None, style: str = "schema"
+) -> T:
     """Pide JSON como texto, lo extrae y lo valida. Lanza `ValueError` si no sirve.
 
     Es el camino de los modelos locales: no hay garantía de formato, por eso el resultado
     siempre pasa por Pydantic y, si falla, por el bucle de reparación.
     """
-    text = generate(schema_prompt(prompt, schema))
+    text = generate(schema_prompt(prompt, schema, style))
     if record is not None:
         record(text)  # para diagnosticar: qué devolvió realmente el modelo
     return schema.model_validate(extract_json(text))
@@ -152,6 +206,7 @@ class OpenAICompatLLM:
         system_prompt: str | None = None,
         min_interval: float = 0.0,
         max_retry_wait: float = 60.0,
+        prompt_style: str = "schema",
     ) -> None:
         self.base_url = (
             base_url or os.environ.get("HARNESS_BASE_URL") or "http://localhost:8000/v1"
@@ -171,6 +226,7 @@ class OpenAICompatLLM:
         self.system_prompt = system_prompt
         self.min_interval = min_interval  # segundos mínimos entre peticiones (límites de RPM)
         self.max_retry_wait = max_retry_wait  # esperas mayores se tratan como cuota agotada
+        self.prompt_style = prompt_style
         self._last_request = 0.0
         self.last_usage: tuple[int, int] | None = None
 
@@ -270,9 +326,10 @@ class OpenAICompatLLM:
         if not answer.strip() and choice.get("finish_reason") == "length":
             # El modelo gastó todo el límite pensando: no es un error del modelo sino de
             # configuración, y seguir midiendo así daría resultados inválidos.
-            raise LLMError(
+            raise TruncatedResponse(
                 f"Respuesta vacía por límite de tokens (max_tokens={self.max_tokens}): un modelo "
-                "de razonamiento gastó todo pensando. Subí --max-tokens (p. ej. 4096)."
+                "de razonamiento gastó todo pensando. Subí --max-tokens (p. ej. 4096).",
+                self.max_tokens,
             )
         return answer
 
@@ -285,6 +342,7 @@ class OpenAICompatLLM:
             prompt,
             schema,
             record=lambda t: setattr(self, "last_text", t),
+            style=self.prompt_style,
         )
 
 
@@ -304,6 +362,7 @@ class TransformersLLM:
         temperature: float = 0.0,
         system_prompt: str | None = None,
         device_map: str = "auto",
+        prompt_style: str = "schema",
     ) -> None:
         try:
             import torch
@@ -314,6 +373,7 @@ class TransformersLLM:
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.system_prompt = system_prompt
+        self.prompt_style = prompt_style
         self.last_usage: tuple[int, int] | None = None
         self._tok = AutoTokenizer.from_pretrained(model_id)
         kwargs: dict = {"device_map": device_map}
@@ -358,7 +418,11 @@ class TransformersLLM:
 
     def structured(self, prompt: str, schema: type[T], *, label: str = "") -> T:
         return structured_from_text(
-            self.generate, prompt, schema, record=lambda t: setattr(self, "last_text", t)
+            self.generate,
+            prompt,
+            schema,
+            record=lambda t: setattr(self, "last_text", t),
+            style=self.prompt_style,
         )
 
 
@@ -404,9 +468,11 @@ def build_llm(name: str = "scripted", **options) -> LLM:
             max_tokens=options.get("max_tokens", 512),
             retries=options.get("retries", 2),
             min_interval=options.get("min_interval", 0.0),
+            prompt_style=options.get("prompt_style", "schema"),
         )
     if name == "transformers":
-        kwargs = {k: options[k] for k in ("quantization", "max_new_tokens") if k in options}
+        names = ("quantization", "max_new_tokens", "prompt_style")
+        kwargs = {k: options[k] for k in names if k in options}
         if "max_tokens" in options:  # mismo flag de la CLI para todos los backends
             kwargs["max_new_tokens"] = options["max_tokens"]
         if options.get("model"):

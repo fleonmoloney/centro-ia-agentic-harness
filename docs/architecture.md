@@ -119,3 +119,18 @@ guion: validan el control, no la calidad. Las APIs de estos frameworks cambian s
 versiones mínimas están en `pyproject.toml` y el CI corre un job `frameworks` (Python 3.12).
 **Verificación:** prueba de mutación: si las herramientas llaman al registro sin pasar por la
 puerta, las pruebas de los tres adaptadores fallan.
+
+## ADR-013: Protocolo de medición v2 (v0.5)
+**Contexto:** la primera medición real (protocolo v1) mostró tres cosas: un modelo chico devolvía el
+esquema JSON en vez de una instancia; un modelo grande inventaba una cédula con dígito verificador
+válido; y excluir de las tasas una respuesta vacía por agotar tokens favorecía al modelo.
+**Decisión:** (1) estilo de prompt `example` opcional, sin quitar el v1 (cambiar el default rompería
+la comparabilidad con lo medido); (2) verificación de anclaje opcional por caso, con conteo de
+rechazos (`grounding_rejections`) para saber cuántas veces el modelo intentó inventar; el mensaje de
+reintento le dice que deje el campo vacío, así que el reintento **no premia** inventar; (3) una
+respuesta vacía con `max_tokens >= 4096` cuenta como fallo del modelo.
+**Costos y límites:** el anclaje solo cubre la cédula (otros campos podrían inventarse igual) y
+asume que el dato figura textual en la consulta; el umbral de 4096 es arbitrario; el prompt con
+ejemplo no incluye ninguna pista de qué hacer si falta un dato, a propósito, para que el caso mida
+la tendencia del modelo a inventar.
+
