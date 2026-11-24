@@ -55,6 +55,56 @@ python -m centro_harness.evals --cases evals/live_cases.jsonl --llm compat \
 
 ### Ejemplos
 
+Dos ejemplos que corren **sin modelo, sin API key y sin red**, desde la raíz del repo, después de
+`pip install -e .` (el modelo es un guion, así que prueban la lógica de control, no un LLM):
+
+```bash
+python examples/hitl_demo.py              # puerta HITL: pausa, revisor no autorizado, aprobación
+python examples/agent_demo.py             # agente: pausa, guardado en JSON, reanudación y aprobación
+python examples/agent_demo.py --reject    # lo mismo, pero la persona rechaza: el aviso no se envía
+```
+
+Salida esperada de `agent_demo.py` (la parte que importa):
+
+```
+1) Estado tras start(): awaiting_approval
+   Ya ejecutado: ['consultar']
+   Esperando decisión sobre: notificar {'mensaje': 'Su trámite 4521 fue aprobado'}
+2) Corrida guardada como JSON (678 caracteres); enviados: []
+3) Se restaura el JSON y la persona aprueba
+   Estado final: done
+   Herramientas ejecutadas: ['consultar', 'notificar']
+   Avisos realmente enviados: ['Su trámite 4521 fue aprobado']
+```
+
+**Con un modelo real y aprobación humana de verdad** (`input()` en la consola):
+
+```bash
+export HARNESS_API_KEY=...        # no hace falta en Ollama / servidor local
+python examples/real_model_demo.py --base-url https://openrouter.ai/api/v1 \
+    --model <id>:free --max-tokens 4096
+python examples/real_model_demo.py --framework crewai --base-url ... --model ...
+```
+
+Sin servidor, `python -m centro_harness.mockmodel --port 8000` y `--base-url http://localhost:8000/v1
+--model mock` prueban el cableado (no es un modelo). En Colab/Kaggle, `!python` no tiene teclado:
+usá `--approve yes|no` o `%run examples/real_model_demo.py ...`.
+
+| Camino | Qué lo prueba hoy | Qué NO está probado |
+|---|---|---|
+| `harness` (lazo de agente) | tests contra el servidor simulado | ningún modelo real |
+| `--framework crewai` | test con guion; el `Budget` del harness corta al equipo | ningún modelo real; CrewAI usa ReAct en texto y con modelos débiles el formato falla |
+| `examples/ag2_real_model.py` | corrido de punta a punta contra el servidor simulado, en un entorno aparte | que un modelo real llame herramientas; el `Budget` del harness no lo alcanza |
+| BeeAI | solo a nivel de herramienta | un agente de BeeAI completo: no hay script |
+
+**AG2 con modelo real necesita su propio entorno** (`pip install -e ".[ag2-real]"`): `ag2[openai]` trae
+`openai` 3.x, que choca con `instructor` y `litellm`, de los que depende CrewAI (`pip check` falla en
+un mismo entorno). Los extras `[frameworks]` sí conviven, pero AG2 queda solo con `TestConfig`.
+
+Para usar un modelo real en `agent_demo.py`, reemplazá `ScriptedLLM(...)` por un cliente de
+[`docs/providers.md`](docs/providers.md); el resto no cambia. Los fragmentos de abajo son las
+mismas ideas en versión corta (en el segundo, `modelo` es cualquier cliente del harness):
+
 HITL (la aprobación exige el `request_id` de lo que la persona revisó):
 
 ```python
@@ -82,16 +132,16 @@ if run.status == "awaiting_approval":
     run = runner.resume(AgentRun.from_json(guardado), approved=True, reviewer="supervisora")
 ```
 
-## Estado de verificación (22/11/2026)
+## Estado de verificación (24/11/2026)
 
 **Verificado en este entorno** (Linux, Python 3.13):
 
-- 150 pruebas y `ruff` en verde (con los extras de frameworks y de SQLite instalados; sin ellos se omiten las que los necesitan); 32 de 32 casos deterministas.
+- 161 pruebas y `ruff` en verde (con los extras de frameworks y de SQLite instalados; sin ellos pasan 152 y se omiten 9); 32 de 32 casos deterministas. Los ejemplos de `examples/` están cubiertos por `tests/test_examples.py` (los de guion, también como scripts; `real_model_demo.py`, contra el servidor simulado y con guion para CrewAI). **No se corrió ningún modelo real con ellos.**
 - **Prueba de mutación:** se rompió a propósito la puerta HITL (aprobar todo), el tope de pasos y
   el enmascarado recursivo; la suite detecta las tres (la puerta rota sale con código 2).
 - Cliente HTTP, modelos de razonamiento, `Retry-After`, espaciado de peticiones, cuota agotada y
   reporte parcial: **contra servidores HTTP simulados** en un hilo (no mocks de `urllib`).
-- Integraciones: con un agente real de AG2, un equipo real de CrewAI y las herramientas de BeeAI, una acción de riesgo alto queda pendiente y nada se ejecuta sin aprobación; si el adaptador salta la puerta, las pruebas fallan. Se instalaron juntos sin conflictos (`pip check`) en Python 3.13.
+- Integraciones: con un agente real de AG2, un equipo real de CrewAI y las herramientas de BeeAI, una acción de riesgo alto queda pendiente y nada se ejecuta sin aprobación; si el adaptador salta la puerta, las pruebas fallan. Se instalaron juntos sin conflictos (`pip check`) en Python 3.13, pero **sin** `ag2[openai]`: AG2 con un modelo real pide `openai` 3.x y choca con CrewAI (ver Ejemplos).
 - Persistencia: una solicitud pausada sobrevive a un reinicio con SQLite, y el agente retoma
   desde la corrida serializada.
 - **Reportado por el autor, v0.3.0** (con capturas de pantalla del 22/11/2026): en **Windows** (cmd) la suite live contra `harness-mockmodel` dio 19/19 y 0 violaciones de invariante, así que el camino HTTP y el servidor simulado funcionan allí; en **GitHub Codespaces** `docker build` y `docker run` se completaron y mostraron el reporte de evals. Además, según el autor, las pruebas pasaron en su equipo y en Colab (sin captura). Falta anotar la versión de Python en cada entorno, y nada de esto incluye las integraciones de la v0.4. El 19/19 contra el modelo simulado prueba el harness, no un modelo.
@@ -200,7 +250,9 @@ src/centro_harness/   agent · hitl · budget · reflection · schemas · jsonut
                       integrations/ (beeai · ag2 · crewai)
 evals/cases.jsonl     32 casos deterministas (CI)
 evals/live_cases.jsonl  19 casos con modelo real
-tests/                150 pruebas
+tests/                161 pruebas
+examples/             hitl_demo.py · agent_demo.py (sin modelo, sin API key)
+                      real_model_demo.py (harness / CrewAI) · ag2_real_model.py (entorno aparte)
 docs/                 architecture.md (ADR 001-013) · evals.md · providers.md
 notebooks/            live_eval_colab_kaggle.ipynb
 .github/workflows/    CI: ruff + pytest + evals + imagen Docker + job frameworks

@@ -119,6 +119,14 @@ guion: validan el control, no la calidad. Las APIs de estos frameworks cambian s
 versiones mínimas están en `pyproject.toml` y el CI corre un job `frameworks` (Python 3.12).
 **Verificación:** prueba de mutación: si las herramientas llaman al registro sin pasar por la
 puerta, las pruebas de los tres adaptadores fallan.
+**Addendum (v0.5.1): modelo real y compatibilidad.** `examples/real_model_demo.py` corre el lazo
+del harness o un agente de CrewAI con un modelo de verdad; `examples/ag2_real_model.py` hace lo propio
+con AG2. Hallazgo de dependencias: AG2 1.x solo habla con un servidor OpenAI-compatible con
+`ag2[openai]`, que exige `openai` 3.x (importa `openai.types.responses.ServiceTier`), mientras
+`instructor` y `litellm`, de CrewAI, exigen `openai` < 3. Con `openai` 2.x AG2 no importa y con 3.x
+`pip check` falla para CrewAI. Decisión: extra `[ag2-real]` y entorno separado; `[frameworks]` queda
+sin él y el job de CI no lo instala. No probado: ningún modelo real con ninguno de los tres
+caminos (solo el servidor simulado y modelos de guion); BeeAI sigue sin agente completo.
 
 ## ADR-013: Protocolo de medición v2 (v0.5)
 **Contexto:** la primera medición real (protocolo v1) mostró tres cosas: un modelo chico devolvía el
