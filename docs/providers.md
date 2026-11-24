@@ -4,10 +4,12 @@ El harness habla con cualquier servidor compatible con la API de OpenAI
 (`/chat/completions`). Para medir un modelo basta:
 
 ```bash
+# --prompt-style example = protocolo v2; sin ese flag se usa el v1 (esquema JSON completo)
 export HARNESS_API_KEY=...        # no hace falta en servidores locales
 python -m centro_harness.evals --cases evals/live_cases.jsonl --llm compat \
     --base-url <URL>/v1 --model <ID-DEL-MODELO> \
     --repeats 1 --max-tokens 4096 --min-interval 3.1 --max-total-calls 45 \
+    --prompt-style example \
     --label "<proveedor>/<modelo> 2026-11-22" --out-json reports/<nombre>.json
 python -m centro_harness.compare reports/*.json --out-md reports/comparacion.md
 ```

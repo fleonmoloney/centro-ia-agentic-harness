@@ -40,15 +40,27 @@ from centro_harness.agent import AgentRunner
 from centro_harness.budget import Budget
 from centro_harness.cost_model import TaskSpec, ToolDoc, compare_tool_assignment
 from centro_harness.hitl import HITLGate, Risk, ToolRegistry, ToolSpec
-from centro_harness.llm import LLM, LLMError, QuotaExhausted, ScriptedLLM, build_llm
+from centro_harness.llm import (
+    LLM,
+    LLMError,
+    QuotaExhausted,
+    ScriptedLLM,
+    TruncatedResponse,
+    build_llm,
+)
 from centro_harness.reflection import run_reflection
 from centro_harness.schemas import (
     InstitutionalTicket,
     MedicalProtocol,
     StructuredOutputError,
+    ci_grounding_check,
     structured_with_retry,
 )
 from centro_harness.tracing import TracedLLM, Tracer
+
+# Si un modelo agota este tope de tokens sin responder, cuenta como fallo del modelo (con un tope
+# más bajo es un problema de configuración y la ejecución se excluye de las tasas).
+TRUNCATION_FAILS_FROM = 4096
 
 SCHEMAS = {"InstitutionalTicket": InstitutionalTicket, "MedicalProtocol": MedicalProtocol}
 
@@ -203,9 +215,10 @@ def _run_structured(case: dict, shared_llm: LLM | None) -> tuple[dict, Tracer]:
     inner = shared_llm or ScriptedLLM(structured=case["scripted"])
     llm = TracedLLM(inner, tracer, _budget_for(case, shared_llm is not None))
     schema = SCHEMAS[case["schema"]]
+    check = ci_grounding_check(case["prompt"]) if case.get("grounded") else None
     try:
         obj = structured_with_retry(
-            llm, case["prompt"], schema, max_attempts=case.get("max_attempts", 3)
+            llm, case["prompt"], schema, max_attempts=case.get("max_attempts", 3), check=check
         )
         actual = {"ok": True, **obj.model_dump()}
     except StructuredOutputError as exc:
@@ -216,6 +229,8 @@ def _run_structured(case: dict, shared_llm: LLM | None) -> tuple[dict, Tracer]:
             "last_output": str(getattr(inner, "last_text", "") or "")[:400],
         }
     actual["attempts"] = tracer.calls
+    if check is not None:
+        actual["grounding_rejections"] = check.rejections  # veces que intentó inventar la cédula
     return actual, tracer
 
 
@@ -377,6 +392,11 @@ def run_case(case: dict, *, mode: str, shared_llm: LLM | None, repeat: int = 1) 
             return CaseResult(case["id"], kind, "fail", f"tipo de caso desconocido: {kind}", repeat)
     except QuotaExhausted:
         raise  # no es un fallo del caso: la corrida entera debe cortarse (ver main)
+    except TruncatedResponse as exc:
+        if exc.max_tokens >= TRUNCATION_FAILS_FROM:
+            detail = f"sin respuesta: el modelo agotó {exc.max_tokens} tokens"
+            return CaseResult(case["id"], kind, "fail", detail, repeat)
+        return CaseResult(case["id"], kind, "error", f"LLMError: {exc}", repeat)
     except LLMError as exc:  # el servidor falló: la medición no vale, no es culpa del modelo
         return CaseResult(case["id"], kind, "error", f"LLMError: {exc}", repeat)
 
@@ -570,6 +590,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quantization", choices=["4bit"], help="Solo con --llm transformers")
     parser.add_argument("--json-mode", action="store_true", help="Pide response_format json_object")
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument(
+        "--prompt-style", choices=["schema", "example"], default="schema",
+        help="schema = protocolo v1 (esquema JSON completo); example = v2 (objeto de ejemplo)",
+    )
     parser.add_argument("--retries", type=int, default=2, help="Reintentos ante 429/5xx (compat)")
     parser.add_argument(
         "--min-interval", type=float, default=0.0,
@@ -595,6 +619,7 @@ def main(argv: list[str] | None = None) -> int:
         "max_tokens": args.max_tokens,
         "retries": args.retries,
         "min_interval": args.min_interval,
+        "prompt_style": args.prompt_style,
     }.items() if v is not None}
     base = build_llm(args.llm, **options) if mode == "live" else None
     shared = _CappedLLM(base, args.max_total_calls) if base and args.max_total_calls else base
@@ -627,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
         "base_url": args.base_url,
         "quantization": args.quantization,
         "json_mode": bool(args.json_mode),
+        "prompt_style": args.prompt_style,
         "repeats": repeats,
         "cases_file": str(args.cases),
         "label": args.label,

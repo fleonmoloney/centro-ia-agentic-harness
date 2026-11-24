@@ -7,6 +7,7 @@ Regla del harness: el output de un agente que va a un sistema institucional se v
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Literal, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -104,7 +105,40 @@ class StructuredOutputError(RuntimeError):
         self.last_error = last_error
 
 
+class GroundingError(ValueError):
+    """Un dato obligatorio no figura en el texto de origen (posible invención del modelo)."""
+
+
+_CI_IN_TEXT = re.compile(r"\d{1,2}[.\s]?\d{3}[.\s]?\d{3}\s?-?\s?\d")
+
+
+def ci_grounding_check(source_text: str) -> Callable[[BaseModel], str | None]:
+    """Verificación de anclaje: la cédula extraída debe figurar en el texto de la consulta.
+
+    Validar el dígito verificador no distingue una cédula real de una inventada que casualmente
+    pasa el cálculo (medido: un modelo inventó `1.000.000-8` cuando la consulta no traía cédula).
+    Devuelve una función `ticket -> mensaje de error | None`. Cuenta los rechazos en
+    `check.rejections` para poder medir cuántas veces el modelo intentó inventar.
+    """
+    found = {re.sub(r"\D", "", m) for m in _CI_IN_TEXT.findall(source_text or "")}
+
+    def check(ticket: BaseModel) -> str | None:
+        digits = re.sub(r"\D", "", getattr(ticket, "citizen_id", "") or "")
+        if digits in found:
+            return None
+        check.rejections += 1
+        return (
+            "citizen_id no figura en el texto de la consulta. Si la consulta no trae una "
+            "cédula, no la inventes: dejá citizen_id vacío."
+        )
+
+    check.rejections = 0
+    return check
+
+
 def _describe_error(exc: ValueError) -> str:
+    if isinstance(exc, GroundingError):
+        return str(exc)
     if isinstance(exc, ValidationError):
         return "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
     return f"{type(exc).__name__}: {exc}"[:300]
@@ -117,6 +151,7 @@ def structured_with_retry(
     *,
     max_attempts: int = 3,
     label: str = "structured",
+    check: Callable[[T], str | None] | None = None,
 ) -> T:
     """Pide una salida estructurada; si no valida, reintenta mostrando el error al modelo.
 
@@ -127,7 +162,11 @@ def structured_with_retry(
     last_error = ""
     for _ in range(max_attempts):
         try:
-            return llm.structured(current, schema, label=label)
+            obj = llm.structured(current, schema, label=label)
+            problem = check(obj) if check else None
+            if problem:
+                raise GroundingError(problem)
+            return obj
         except ValueError as exc:  # ValidationError y JSONDecodeError son ValueError
             last_error = _describe_error(exc)
             current = (
@@ -140,7 +179,9 @@ def structured_with_retry(
 __all__ = [
     "InstitutionalTicket",
     "MedicalProtocol",
+    "GroundingError",
     "StructuredOutputError",
+    "ci_grounding_check",
     "extract_json",
     "format_ci",
     "is_valid_ci",
