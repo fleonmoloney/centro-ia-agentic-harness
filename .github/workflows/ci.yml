@@ -25,6 +25,11 @@ jobs:
         run: ruff check .
       - name: Tests
         run: pytest
+      - name: Ejemplos del README (sin modelo)
+        run: |
+          python examples/hitl_demo.py
+          python examples/agent_demo.py
+          python examples/agent_demo.py --reject
       - name: Evals (modo scripted, compuerta de regresión)
         run: python -m centro_harness.evals --cases evals/cases.jsonl --out-md reports/latest.md --out-json reports/latest.json
       - name: Subir reporte de evals
