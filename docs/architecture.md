@@ -142,3 +142,20 @@ asume que el dato figura textual en la consulta; el umbral de 4096 es arbitrario
 ejemplo no incluye ninguna pista de qué hacer si falta un dato, a propósito, para que el caso mida
 la tendencia del modelo a inventar.
 
+## ADR-014: Protocolo de medición v3 (v0.6)
+**Contexto:** las primeras corridas reales del v2 (Nemotron 3.5 y Qwen 3B) mostraron aprobaciones
+que no medían al modelo: tres casos de agente los aprobaba quien no daba ni un paso, y los dos
+casos "no inventar la cédula" aprobaban cualquier respuesta, porque en una consulta sin cédula
+ninguna salida puede validar (el esquema rechaza lo vacío y el anclaje rechaza lo inventado). El
+contador `grounding_rejections` tampoco veía las cédulas inventadas con formato inválido.
+**Decisión:** (1) `status: done` obligatorio en esos tres casos; (2) registrar el texto crudo de
+cada intento estructurado y contar `fabricated_attempts` (cualquier cédula ausente de la consulta),
+con `max_fabricated_attempts: 0` en los dos casos; (3) métrica `completion` y lista
+`passed_without_completing` en el reporte; (4) `detail` y `last_output` cuando el agente falla;
+(5) `protocol_version` en el reporte. Los números v1 y v2 quedan como línea base, no comparables.
+**Costos y límites:** endurecer los casos baja las tasas por construcción; una caída entre v2 y v3
+no es una regresión del modelo. El mensaje de reintento del anclaje pide dejar `citizen_id` vacío,
+pero el esquema rechaza el vacío: el modelo recibe una instrucción que el propio harness vuelve a
+rechazar, y la salida correcta termina en "sin ticket" (`ok: false`), que es lo que se busca (lo
+decide una persona). No se cambió. Los textos de intento solo se guardan en los casos con anclaje.
+

@@ -5,6 +5,8 @@ El harness habla con cualquier servidor compatible con la API de OpenAI
 
 ```bash
 # --prompt-style example = protocolo v2; sin ese flag se usa el v1 (esquema JSON completo)
+# Con el harness 0.6 los casos se evalúan con el protocolo v3 (más estricto: el agente debe
+# terminar y no se puede inventar la cédula); sus tasas no son comparables con las de 0.5.x.
 export HARNESS_API_KEY=...        # no hace falta en servidores locales
 python -m centro_harness.evals --cases evals/live_cases.jsonl --llm compat \
     --base-url <URL>/v1 --model <ID-DEL-MODELO> \

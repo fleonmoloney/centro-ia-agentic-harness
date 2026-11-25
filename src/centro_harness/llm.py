@@ -176,8 +176,10 @@ class ScriptedLLM:
 
     def structured(self, prompt: str, schema: type[T], *, label: str = "") -> T:
         self.prompts.append(prompt)
+        item = self._next(self._structured, "estructurada")
+        self.last_text = json.dumps(item, ensure_ascii=False)  # como el texto crudo de un modelo
         # model_validate lanza ValidationError si el guion trae un dato inválido a propósito.
-        return schema.model_validate(self._next(self._structured, "estructurada"))
+        return schema.model_validate(item)
 
 
 class OpenAICompatLLM:
