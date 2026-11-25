@@ -61,6 +61,8 @@ que revenden acceso: tus prompts pasan por un intermediario desconocido.
 
 | Flag | Para qué |
 |---|---|
+| `--extra-body '{"reasoning_effort": "low"}'` | Suma campos JSON al cuerpo de cada petición (NVIDIA Build acepta `reasoning_effort`: none/low/high). No puede pisar `model` ni `messages`; queda en el reporte |
+| `--system-prompt "..."` | Mensaje de sistema fijo (solo `--llm compat`); queda en el reporte |
 | `--min-interval 3.1` | Espacia las peticiones para quedar bajo 20 por minuto (60 s / 20 = 3 s, más margen) |
 | `--max-total-calls 45` | Tope global de llamadas. Al alcanzarlo la corrida **se corta** y deja un reporte parcial marcado como `MEDICIÓN INCOMPLETA` (código de salida 3) |
 | `--max-tokens 4096` | Obligatorio con modelos de razonamiento (ver abajo) |

@@ -30,6 +30,7 @@ espera tu decisión. Usá solo datos sintéticos si el proveedor es externo (ver
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from centro_harness import (
@@ -77,6 +78,10 @@ def build_traced_llm(args: argparse.Namespace) -> tuple[TracedLLM, Tracer]:
     options = {"max_tokens": args.max_tokens, "prompt_style": args.prompt_style}
     if args.llm == "compat":
         options.update(base_url=args.base_url, model=args.model, min_interval=args.min_interval)
+        if args.extra_body:
+            options["extra_body"] = args.extra_body
+        if args.system_prompt:
+            options["system_prompt"] = args.system_prompt
     else:
         options.update(model=args.model)
         if args.quantization:
@@ -156,6 +161,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-tokens", type=int, default=2048, help="más con modelos de razonamiento")
     p.add_argument("--prompt-style", choices=["schema", "example"], default="example")
     p.add_argument("--min-interval", type=float, default=0.0, help="segundos entre llamadas")
+    p.add_argument(
+        "--extra-body", type=json.loads,
+        help='JSON extra por petición, p. ej. \'{"reasoning_effort": "low"}\'',
+    )
+    p.add_argument("--system-prompt", help="mensaje de sistema fijo (solo compat)")
     p.add_argument("--max-calls", type=int, default=20)
     p.add_argument("--max-seconds", type=float, default=300)
     p.add_argument("--max-steps", type=int, default=6)

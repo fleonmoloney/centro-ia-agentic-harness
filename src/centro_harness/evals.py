@@ -702,6 +702,16 @@ def exit_code(summary: dict, mode: str, min_pass_rate: float | None) -> int:
     return 0
 
 
+def _json_object(text: str) -> dict:
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(f"no es JSON válido: {exc}") from exc
+    if not isinstance(value, dict) or {"model", "messages"} & set(value):
+        raise argparse.ArgumentTypeError("debe ser un objeto JSON sin las claves model/messages")
+    return value
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Corre los evals del harness.")
     parser.add_argument("--cases", default="evals/cases.jsonl")
@@ -729,6 +739,14 @@ def main(argv: list[str] | None = None) -> int:
         "--max-total-calls", type=int,
         help="Tope global de llamadas al modelo; al alcanzarlo se corta y el reporte es parcial",
     )  # fmt: skip
+    parser.add_argument(
+        "--system-prompt", help="Mensaje de sistema fijo (solo --llm compat); queda en el reporte"
+    )
+    parser.add_argument(
+        "--extra-body", type=_json_object,
+        help='JSON que se suma al cuerpo de cada petición (solo --llm compat), '
+        'p. ej. \'{"reasoning_effort": "low"}\'',
+    )  # fmt: skip
     parser.add_argument("--repeats", type=int, default=1, help="Repeticiones por caso (live)")
     parser.add_argument("--min-pass-rate", type=float, help="Falla (código 1) si queda por debajo")
     parser.add_argument("--label", default="", help="Texto libre que se guarda en el reporte")
@@ -746,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
         "retries": args.retries,
         "min_interval": args.min_interval,
         "prompt_style": args.prompt_style,
+        "system_prompt": args.system_prompt if args.llm == "compat" else None,
+        "extra_body": args.extra_body if args.llm == "compat" else None,
     }.items() if v is not None}
     base = build_llm(args.llm, **options) if mode == "live" else None
     shared = _CappedLLM(base, args.max_total_calls) if base and args.max_total_calls else base
@@ -780,6 +800,8 @@ def main(argv: list[str] | None = None) -> int:
         "quantization": args.quantization,
         "json_mode": bool(args.json_mode),
         "prompt_style": args.prompt_style,
+        "system_prompt": args.system_prompt,
+        "extra_body": args.extra_body,
         "repeats": repeats,
         "cases_file": str(args.cases),
         "label": args.label,
