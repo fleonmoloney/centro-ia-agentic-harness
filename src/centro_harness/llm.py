@@ -209,7 +209,12 @@ class OpenAICompatLLM:
         min_interval: float = 0.0,
         max_retry_wait: float = 60.0,
         prompt_style: str = "schema",
+        extra_body: dict | None = None,
     ) -> None:
+        reserved = {"model", "messages"} & set(extra_body or {})
+        if reserved:
+            raise ValueError(f"extra_body no puede pisar {sorted(reserved)}")
+        self.extra_body = dict(extra_body or {})  # p. ej. {"reasoning_effort": "low"}
         self.base_url = (
             base_url or os.environ.get("HARNESS_BASE_URL") or "http://localhost:8000/v1"
         ).rstrip("/")
@@ -311,6 +316,7 @@ class OpenAICompatLLM:
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
+        payload.update(self.extra_body)
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         data = self._post(payload)
@@ -471,6 +477,8 @@ def build_llm(name: str = "scripted", **options) -> LLM:
             retries=options.get("retries", 2),
             min_interval=options.get("min_interval", 0.0),
             prompt_style=options.get("prompt_style", "schema"),
+            system_prompt=options.get("system_prompt"),
+            extra_body=options.get("extra_body"),
         )
     if name == "transformers":
         names = ("quantization", "max_new_tokens", "prompt_style")
