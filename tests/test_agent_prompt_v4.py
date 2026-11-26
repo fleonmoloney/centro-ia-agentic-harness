@@ -15,15 +15,20 @@ from centro_harness.llm import example_skeleton, schema_prompt
 from centro_harness.schemas import InstitutionalTicket, MedicalProtocol
 
 
-def test_protocol_is_v4():
-    assert PROTOCOL_VERSION == 4
+def test_protocol_is_v5():
+    assert PROTOCOL_VERSION == 5
 
 
 def test_agent_skeleton_shows_arguments_as_object_and_alternatives():
     shape = example_skeleton(AgentAction)
     assert shape["arguments"] == {}
-    assert shape["tool"].endswith("| null")
-    assert shape["final_answer"].endswith("| null")
+    assert "null" in shape["tool"] and "null" in shape["final_answer"]
+
+
+def test_agent_skeleton_has_no_pipe_alternatives():
+    """Un modelo de 7B copió `buscar_normativa | null` como nombre de herramienta."""
+    shape = example_skeleton(AgentAction)
+    assert all("|" not in v for v in shape.values() if isinstance(v, str))
 
 
 def test_agent_example_prompt_explains_one_or_the_other():

@@ -174,3 +174,14 @@ usa ese hook si existe. Los demás esquemas conservan el relleno exacto (test qu
 siguen valiendo; los de agente del v3 no se comparan con los del v4. Las herramientas no declaran
 sus parámetros en el prompt (`ToolSpec` solo tiene nombre, riesgo y descripción): si tras este
 cambio el modelo llama bien pero con argumentos equivocados, el siguiente paso es declararlos.
+
+## ADR-016: Protocolo v5, sin `a | null` en el esqueleto del agente (v0.6.5)
+
+**Contexto:** con el esqueleto del ADR-015, ultra pasó 6/6 casos de agente, pero Qwen2.5-7B devolvió
+`"tool": "buscar_normativa | null"` en `usa-normativa`: copió el texto de la alternativa y el arnés
+rechazó esa herramienta inexistente hasta `stuck`.
+**Decisión:** el esqueleto dice las alternativas en prosa (`<nombre de la herramienta; null si das la
+respuesta final>`) y un test impide `|` en esos valores. Protocolo v5.
+**Costos y límites:** el cambio solo toca el prompt del agente; los resultados de agente del v4 (ultra
+6/6, Qwen 4/6) hay que repetirlos con el v5. No se agregó tolerancia en el validador (aceptar
+`herramienta | null`) para no medir una salida que el modelo no dio bien.

@@ -79,6 +79,17 @@ class InstitutionalTicket(BaseModel):
         return self
 
 
+class InstitutionalTicketNeutral(InstitutionalTicket):
+    """Variante de medición: misma validación, descripción de `citizen_id` sin empujar a inventar.
+
+    La descripción estándar dice "con verificador válido": a un modelo que no encuentra la cédula
+    en la consulta le pide una cédula válida. Acá solo se pide la que figura en la consulta. La
+    validación (formato y verificador) es idéntica; cambia únicamente lo que lee el modelo.
+    """
+
+    citizen_id: str = Field(description="Cédula tal como figura en la consulta; vacío si no hay")
+
+
 class MedicalProtocol(BaseModel):
     """Protocolo clínico extraído por un agente; nunca se aplica sin revisión si hay duda."""
 
@@ -178,6 +189,7 @@ def structured_with_retry(
 
 __all__ = [
     "InstitutionalTicket",
+    "InstitutionalTicketNeutral",
     "MedicalProtocol",
     "GroundingError",
     "StructuredOutputError",

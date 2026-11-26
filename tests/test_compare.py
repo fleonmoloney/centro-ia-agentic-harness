@@ -52,3 +52,29 @@ def test_mismatched_cases_are_called_out(reports, tmp_path):
     altered = tmp_path / "alt.json"
     altered.write_text(json.dumps(data), encoding="utf-8")
     assert "NO cubren los mismos casos" in compare([reports[0], str(altered)])
+
+
+def test_reports_with_different_case_sets_are_not_contrasted(reports, tmp_path):
+    """Un 0/6 de los dos casos difíciles no se contrasta con una suite de 19 casos."""
+    data = json.loads(open(reports[0], encoding="utf-8").read())
+    data["summary"]["per_case"].pop(next(iter(data["summary"]["per_case"])))
+    data["summary"]["pass_rate"] = 0.0  # fuerza una diferencia
+    altered = tmp_path / "alt2.json"
+    altered.write_text(json.dumps(data), encoding="utf-8")
+    text = compare([reports[1], str(altered)])
+    assert "no comparables (casos distintos)" in text
+    assert "intervalos no se solapan" not in text
+
+
+def test_different_protocols_or_ticket_variants_are_not_contrasted(reports, tmp_path):
+    for key, value, expected in (
+        ("protocol_version", 99, "protocolo distinto"),
+        ("ticket_schema", "neutral", "variante de esquema distinto"),
+    ):
+        data = json.loads(open(reports[0], encoding="utf-8").read())
+        data["meta"][key] = value
+        data["summary"]["pass_rate"] = 0.0
+        altered = tmp_path / f"{key}.json"
+        altered.write_text(json.dumps(data), encoding="utf-8")
+        text = compare([reports[1], str(altered)])
+        assert expected in text
