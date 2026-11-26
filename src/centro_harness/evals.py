@@ -66,9 +66,11 @@ TRUNCATION_FAILS_FROM = 4096
 # Versión del protocolo de medición. v1: esquema JSON en el prompt. v2: prompt con ejemplo, anclaje
 # de la cédula, vacíos por tokens. v3: los casos de agente exigen terminar (`status: done`), los de
 # "no inventar la cédula" miden los intentos del modelo (antes no podían fallar), y el reporte
-# separa lo completado de lo aprobado por inacción. Los números de un protocolo no se comparan con
-# los de otro.
-PROTOCOL_VERSION = 3
+# separa lo completado de lo aprobado por inacción. v4: igual que v3 salvo el prompt del paso del
+# agente (el esqueleto mostraba `arguments` como texto y `tool` y `final_answer` a la vez); los
+# prompts de structured y reflection son idénticos a v3. Los números de un protocolo no se
+# comparan con los de otro, salvo structured y reflection entre v3 y v4.
+PROTOCOL_VERSION = 4
 
 SCHEMAS = {"InstitutionalTicket": InstitutionalTicket, "MedicalProtocol": MedicalProtocol}
 

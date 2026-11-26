@@ -51,9 +51,33 @@ class AgentAction(BaseModel):
     """Una acción del agente: llamar una herramienta o dar la respuesta final (una de las dos)."""
 
     reasoning: str = Field(default="", description="Una frase: por qué esta acción")
-    tool: str | None = Field(default=None, description="Nombre de la herramienta a llamar")
-    arguments: dict[str, Any] = Field(default_factory=dict)
-    final_answer: str | None = Field(default=None, description="Respuesta final a la tarea")
+    tool: str | None = Field(
+        default=None,
+        description="Nombre de la herramienta a llamar; null si das la respuesta final",
+    )
+    arguments: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Argumentos de la herramienta como objeto JSON ({} si no lleva)",
+    )
+    final_answer: str | None = Field(
+        default=None, description="Respuesta final a la tarea; null si llamás una herramienta"
+    )
+
+    @classmethod
+    def example_shape(cls) -> dict:
+        """Forma que ve el modelo (estilo `example`).
+
+        El relleno genérico mostraba `tool`, `arguments` y `final_answer` como "<texto>": un
+        modelo que copia la forma llena las dos acciones y manda `arguments` como texto, y el
+        validador lo rechaza. Acá `arguments` es un objeto y `tool`/`final_answer` son
+        alternativas (`a | null`), con la misma convención que los enums.
+        """
+        return {
+            "reasoning": "<texto>",
+            "tool": "<nombre de la herramienta> | null",
+            "arguments": {},
+            "final_answer": "<respuesta final> | null",
+        }
 
     @model_validator(mode="after")
     def _exactly_one(self) -> AgentAction:

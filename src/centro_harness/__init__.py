@@ -32,7 +32,7 @@ from centro_harness.schemas import (
 )
 from centro_harness.tracing import TracedLLM, Tracer
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 __all__ = [
     "LLM",
