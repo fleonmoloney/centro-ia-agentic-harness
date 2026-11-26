@@ -61,6 +61,7 @@ que revenden acceso: tus prompts pasan por un intermediario desconocido.
 
 | Flag | Para qué |
 |---|---|
+| `--timeout 600` | Segundos de espera por respuesta (por defecto 120). Los modelos grandes de NVIDIA Build pueden tardar minutos en cola: con 120 s la ejecución se corta con `read operation timed out` y cuenta como error de infraestructura (excluida de las tasas) |
 | `--extra-body '{"reasoning_effort": "low"}'` | Suma campos JSON al cuerpo de cada petición (NVIDIA Build acepta `reasoning_effort`: none/low/high). No puede pisar `model` ni `messages`; queda en el reporte |
 | `--system-prompt "..."` | Mensaje de sistema fijo (solo `--llm compat`); queda en el reporte |
 | `--min-interval 3.1` | Espacia las peticiones para quedar bajo 20 por minuto (60 s / 20 = 3 s, más margen) |
