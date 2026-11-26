@@ -43,6 +43,25 @@ def _overlap(a: list[float] | None, b: list[float] | None) -> bool:
     return bool(a and b and a[0] <= b[1] and b[0] <= a[1])
 
 
+def _why_not_comparable(a: dict, b: dict) -> str | None:
+    """Motivo por el que dos reportes no se pueden contrastar con intervalos, o None si sí.
+
+    Un intervalo de 6 ejecuciones de los dos casos más difíciles no se contrasta con uno de 19
+    casos; tampoco dos protocolos, dos variantes de esquema ni dos estilos de prompt.
+    """
+    if set(a["summary"]["per_case"]) != set(b["summary"]["per_case"]):
+        return "casos distintos"
+    ma, mb = a["meta"], b["meta"]
+    for key, label, default in (
+        ("protocol_version", "protocolo", None),
+        ("ticket_schema", "variante de esquema", "standard"),
+        ("prompt_style", "estilo de prompt", None),
+    ):
+        if (ma.get(key) or default) != (mb.get(key) or default):
+            return f"{label} distinto"
+    return None
+
+
 def compare(paths: list[str]) -> str:
     reports = [(p, _load(p)) for p in paths]
     names = [_name(r["meta"], Path(p).stem) for p, r in reports]
@@ -74,6 +93,12 @@ def compare(paths: list[str]) -> str:
     notes = []
     case_sets = {tuple(sorted(r["summary"]["per_case"])) for _, r in reports}
     repeats = {r["meta"].get("repeats") for _, r in reports}
+    protocols = {r["meta"].get("protocol_version") for _, r in reports}
+    if len(protocols) > 1:
+        notes.append(
+            f"Protocolos distintos entre reportes ({sorted(map(str, protocols))}): los números de "
+            "agente de un protocolo no valen para otro."
+        )
     if len(case_sets) > 1:
         notes.append("Los reportes NO cubren los mismos casos: la comparación no es directa.")
     if len(repeats) > 1:
@@ -92,6 +117,10 @@ def compare(paths: list[str]) -> str:
             si, sj = reports[i][1]["summary"], reports[j][1]["summary"]
             ri, rj = si["pass_rate"], sj["pass_rate"]
             if ri is not None and rj is not None and ri != rj:
+                why = _why_not_comparable(reports[i][1], reports[j][1])
+                if why:
+                    notes.append(f"{names[i]} vs {names[j]}: no comparables ({why}).")
+                    continue
                 verdict = (
                     "los intervalos se solapan: NO hay evidencia de diferencia"
                     if _overlap(si["ci95"], sj["ci95"])

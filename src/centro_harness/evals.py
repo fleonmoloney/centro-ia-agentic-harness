@@ -52,6 +52,7 @@ from centro_harness.llm import (
 from centro_harness.reflection import run_reflection
 from centro_harness.schemas import (
     InstitutionalTicket,
+    InstitutionalTicketNeutral,
     MedicalProtocol,
     StructuredOutputError,
     ci_grounding_check,
@@ -67,12 +68,29 @@ TRUNCATION_FAILS_FROM = 4096
 # de la cédula, vacíos por tokens. v3: los casos de agente exigen terminar (`status: done`), los de
 # "no inventar la cédula" miden los intentos del modelo (antes no podían fallar), y el reporte
 # separa lo completado de lo aprobado por inacción. v4: igual que v3 salvo el prompt del paso del
-# agente (el esqueleto mostraba `arguments` como texto y `tool` y `final_answer` a la vez); los
+# agente (el esqueleto mostraba `arguments` como texto y `tool` y `final_answer` a la vez). v5:
+# el esqueleto del agente deja de usar `a | null` (Qwen 7B copiaba "herramienta | null"). Los
 # prompts de structured y reflection son idénticos a v3. Los números de un protocolo no se
-# comparan con los de otro, salvo structured y reflection entre v3 y v4.
-PROTOCOL_VERSION = 4
+# comparan con los de otro, salvo structured y reflection entre v3, v4 y v5.
+PROTOCOL_VERSION = 5
 
 SCHEMAS = {"InstitutionalTicket": InstitutionalTicket, "MedicalProtocol": MedicalProtocol}
+
+# Variantes de esquema para medir confusores del prompt. NO son el protocolo: un reporte con
+# variante distinta de "standard" no se compara con los del protocolo (`meta.ticket_schema`).
+TICKET_VARIANTS = {"standard": InstitutionalTicket, "neutral": InstitutionalTicketNeutral}
+_ticket_variant = "standard"
+
+
+def _set_ticket_variant(name: str) -> None:
+    global _ticket_variant
+    if name not in TICKET_VARIANTS:
+        raise ValueError(f"variante desconocida: {name!r} (opciones: {sorted(TICKET_VARIANTS)})")
+    _ticket_variant = name
+
+
+def _schema_for(name: str):
+    return TICKET_VARIANTS[_ticket_variant] if name == "InstitutionalTicket" else SCHEMAS[name]
 
 # Herramientas simuladas para los casos de agente (sin efectos reales).
 AGENT_TOOLS: dict[str, tuple[Risk, str]] = {
@@ -279,7 +297,7 @@ def _run_structured(case: dict, shared_llm: LLM | None) -> tuple[dict, Tracer]:
     inner = shared_llm or ScriptedLLM(structured=case["scripted"])
     recorder = _AttemptRecorder(inner)
     llm = TracedLLM(recorder, tracer, _budget_for(case, shared_llm is not None))
-    schema = SCHEMAS[case["schema"]]
+    schema = _schema_for(case["schema"])
     check = ci_grounding_check(case["prompt"]) if case.get("grounded") else None
     try:
         obj = structured_with_retry(
@@ -765,6 +783,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Segundos de espera por respuesta (solo --llm compat; por defecto 120). Un endpoint "
         "lento corta con 'read operation timed out': error de infraestructura, no del modelo",
     )  # fmt: skip
+    parser.add_argument(
+        "--ticket-schema", choices=sorted(TICKET_VARIANTS), default="standard",
+        help="Variante del esquema del ticket: 'neutral' quita 'con verificador válido' de la "
+        "descripción de citizen_id (misma validación). Es un experimento, no el protocolo",
+    )  # fmt: skip
     parser.add_argument("--repeats", type=int, default=1, help="Repeticiones por caso (live)")
     parser.add_argument("--min-pass-rate", type=float, help="Falla (código 1) si queda por debajo")
     parser.add_argument("--label", default="", help="Texto libre que se guarda en el reporte")
@@ -772,6 +795,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-md")
     args = parser.parse_args(argv)
 
+    _set_ticket_variant(args.ticket_schema)
     mode = "scripted" if args.llm == "scripted" else "live"
     options = {k: v for k, v in {
         "base_url": args.base_url,
@@ -822,6 +846,7 @@ def main(argv: list[str] | None = None) -> int:
         "system_prompt": args.system_prompt,
         "extra_body": args.extra_body,
         "timeout": args.timeout,
+        "ticket_schema": args.ticket_schema,
         "repeats": repeats,
         "cases_file": str(args.cases),
         "label": args.label,

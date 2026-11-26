@@ -70,13 +70,14 @@ class AgentAction(BaseModel):
         El relleno genérico mostraba `tool`, `arguments` y `final_answer` como "<texto>": un
         modelo que copia la forma llena las dos acciones y manda `arguments` como texto, y el
         validador lo rechaza. Acá `arguments` es un objeto y `tool`/`final_answer` son
-        alternativas (`a | null`), con la misma convención que los enums.
+        alternativas dichas en prosa. NO usar `a | null`: un modelo de 7B copió el texto entero
+        (`"tool": "buscar_normativa | null"`) y el arnés rechazó esa herramienta inexistente.
         """
         return {
             "reasoning": "<texto>",
-            "tool": "<nombre de la herramienta> | null",
+            "tool": "<nombre de la herramienta; null si das la respuesta final>",
             "arguments": {},
-            "final_answer": "<respuesta final> | null",
+            "final_answer": "<respuesta final; null si llamás una herramienta>",
         }
 
     @model_validator(mode="after")
