@@ -704,6 +704,17 @@ def exit_code(summary: dict, mode: str, min_pass_rate: float | None) -> int:
     return 0
 
 
+def _positive_float(text: str) -> float:
+    """Tipo de argparse: número de segundos mayor que cero."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"no es un número: {text!r}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError("debe ser mayor que cero")
+    return value
+
+
 def _json_object(text: str) -> dict:
     try:
         value = json.loads(text)
@@ -749,6 +760,11 @@ def main(argv: list[str] | None = None) -> int:
         help='JSON que se suma al cuerpo de cada petición (solo --llm compat), '
         'p. ej. \'{"reasoning_effort": "low"}\'',
     )  # fmt: skip
+    parser.add_argument(
+        "--timeout", type=_positive_float,
+        help="Segundos de espera por respuesta (solo --llm compat; por defecto 120). Un endpoint "
+        "lento corta con 'read operation timed out': error de infraestructura, no del modelo",
+    )  # fmt: skip
     parser.add_argument("--repeats", type=int, default=1, help="Repeticiones por caso (live)")
     parser.add_argument("--min-pass-rate", type=float, help="Falla (código 1) si queda por debajo")
     parser.add_argument("--label", default="", help="Texto libre que se guarda en el reporte")
@@ -768,6 +784,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_style": args.prompt_style,
         "system_prompt": args.system_prompt if args.llm == "compat" else None,
         "extra_body": args.extra_body if args.llm == "compat" else None,
+        "timeout": args.timeout if args.llm == "compat" else None,
     }.items() if v is not None}
     base = build_llm(args.llm, **options) if mode == "live" else None
     shared = _CappedLLM(base, args.max_total_calls) if base and args.max_total_calls else base
@@ -804,6 +821,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_style": args.prompt_style,
         "system_prompt": args.system_prompt,
         "extra_body": args.extra_body,
+        "timeout": args.timeout,
         "repeats": repeats,
         "cases_file": str(args.cases),
         "label": args.label,

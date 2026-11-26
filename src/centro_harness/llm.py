@@ -486,6 +486,7 @@ def build_llm(name: str = "scripted", **options) -> LLM:
             prompt_style=options.get("prompt_style", "schema"),
             system_prompt=options.get("system_prompt"),
             extra_body=options.get("extra_body"),
+            timeout=options.get("timeout", 120.0),
         )
     if name == "transformers":
         names = ("quantization", "max_new_tokens", "prompt_style")
