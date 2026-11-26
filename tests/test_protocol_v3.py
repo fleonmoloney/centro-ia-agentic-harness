@@ -42,7 +42,7 @@ def _live(case: dict, **llm_kwargs):
 
 
 def test_protocol_version_is_declared():
-    assert PROTOCOL_VERSION == 3
+    assert PROTOCOL_VERSION >= 3
 
 
 # ----------------------------------------------------- 1. cédulas inventadas, de cualquier validez

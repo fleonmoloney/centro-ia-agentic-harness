@@ -97,7 +97,14 @@ def _placeholder(prop: dict) -> object:
 
 
 def example_skeleton(schema: type[BaseModel]) -> dict:
-    """Instancia de relleno del esquema: mismas claves, valores de ejemplo."""
+    """Instancia de relleno del esquema: mismas claves, valores de ejemplo.
+
+    Un esquema puede definir `example_shape()` cuando el relleno genérico engaña (p. ej. campos
+    opcionales o un objeto que no es texto). Los demás esquemas conservan el relleno de siempre.
+    """
+    custom = getattr(schema, "example_shape", None)
+    if callable(custom):
+        return custom()
     props = schema.model_json_schema().get("properties", {})
     return {name: _placeholder(prop) for name, prop in props.items()}
 

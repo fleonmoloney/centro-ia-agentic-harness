@@ -159,3 +159,18 @@ pero el esquema rechaza el vacío: el modelo recibe una instrucción que el prop
 rechazar, y la salida correcta termina en "sin ticket" (`ok: false`), que es lo que se busca (lo
 decide una persona). No se cambió. Los textos de intento solo se guardan en los casos con anclaje.
 
+
+## ADR-015: Protocolo v4, prompt del paso del agente (v0.6.2)
+
+**Contexto:** en la suite v3 con cuatro modelos (tres Nemotron de 30B a 550B y Qwen2.5-7B local), los
+casos de agente terminaron en `model_failed`: 2/6 y 0/6, y los mismos casos fallaban en todos. Con
+el estilo `example`, el relleno genérico mostraba `{"tool": "<texto>", "arguments": "<texto>",
+"final_answer": "<texto>"}`: `arguments` como texto (el esquema pide un objeto) y las dos acciones a
+la vez (el validador exige una). Un modelo que copia la forma no puede producir una acción válida.
+**Decisión:** `AgentAction.example_shape()` define la forma del agente (`arguments` como `{}`,
+`tool`/`final_answer` como `a | null`) y descripciones que dicen "null si ...". `example_skeleton`
+usa ese hook si existe. Los demás esquemas conservan el relleno exacto (test que fija el v3).
+**Costos y límites:** los prompts de structured y reflection son idénticos a v3, así que esos números
+siguen valiendo; los de agente del v3 no se comparan con los del v4. Las herramientas no declaran
+sus parámetros en el prompt (`ToolSpec` solo tiene nombre, riesgo y descripción): si tras este
+cambio el modelo llama bien pero con argumentos equivocados, el siguiente paso es declararlos.
