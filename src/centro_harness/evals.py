@@ -638,6 +638,9 @@ def to_markdown(results: list[CaseResult], summary: dict, mode: str, meta: dict)
             f"{meta.get('harness_version')}, protocolo v{meta.get('protocol_version')}.",
             "",
         ]
+        config = _config_line(meta)
+        if config:
+            lines += [config, ""]
     if summary.get("aborted"):
         lines += [
             f"**MEDICIÓN INCOMPLETA**: la corrida se cortó ({summary['aborted']}). "
@@ -720,6 +723,23 @@ def exit_code(summary: dict, mode: str, min_pass_rate: float | None) -> int:
     if min_pass_rate is not None and (summary["pass_rate"] or 0.0) < min_pass_rate:
         return 1
     return 0
+
+
+def _config_line(meta: dict) -> str:
+    """Opciones fuera del protocolo estándar, para que un reporte pegado se explique solo."""
+    parts = []
+    if (meta.get("ticket_schema") or "standard") != "standard":
+        variante = meta["ticket_schema"]
+        parts.append(f"variante de esquema `{variante}` (experimento, no es el protocolo)")
+    if meta.get("extra_body"):
+        parts.append(f"extra-body `{json.dumps(meta['extra_body'], ensure_ascii=False)}`")
+    if meta.get("system_prompt"):
+        parts.append("con system prompt")
+    if meta.get("timeout"):
+        parts.append(f"timeout {meta['timeout']:g} s")
+    if meta.get("prompt_style") and meta["prompt_style"] != "schema":
+        parts.append(f"estilo de prompt `{meta['prompt_style']}`")
+    return ("Configuración: " + "; ".join(parts) + ".") if parts else ""
 
 
 def _positive_float(text: str) -> float:
