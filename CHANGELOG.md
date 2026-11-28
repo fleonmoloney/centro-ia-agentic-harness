@@ -4,6 +4,21 @@ Formato: una sección por versión, de la más nueva a la más vieja. Antes de l
 cambiar entre versiones menores; lo que sí se anota siempre es cuándo cambia el **protocolo de
 medición**, porque los números de un protocolo no se comparan con los de otro (ver la tabla al final).
 
+## 0.7.1 (27/11/2026)
+
+- `examples/real_model_demo.py`: `--timeout` (300 s por defecto; antes eran 120 s y NVIDIA Build cortaba
+  con "The read operation timed out").
+- El mismo ejemplo desactiva la pregunta de CrewAI de subir la traza de la ejecución a sus
+  servidores (`CREWAI_TRACING_ENABLED=false`); se reactiva exportando `true`.
+
+## 0.7.0 (27/11/2026)
+
+- README reescrito: mediciones con el protocolo v5 (super-120B, ultra-550B, Mistral Large 4,
+  Qwen2.5-7B), el experimento `neutral` (6/6 contra 0/6 con el esquema estándar, solo en un modelo),
+  lista de API pública, estado de verificación y límites al día. Lo invalidado queda dicho.
+- Las mediciones de los protocolos v1 a v3 pasan a `docs/historial-mediciones.md`.
+- Sin cambios de código ni de protocolo: los números de la 0.6.6 y la 0.6.7 siguen valiendo.
+
 ## 0.6.7 (27/11/2026)
 
 - El reporte en texto declara la configuración que se aparta del protocolo estándar (variante de

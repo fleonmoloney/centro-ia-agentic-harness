@@ -31,7 +31,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+
+# CrewAI pregunta al terminar si sube la traza de la ejecución (prompts y salidas) a sus servidores.
+# Este ejemplo no lo hace salvo que lo pidas: CREWAI_TRACING_ENABLED=true.
+os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
 
 from centro_harness import (
     AgentRunner,
@@ -77,7 +82,10 @@ def make_gate() -> tuple[HITLGate, list[dict]]:
 def build_traced_llm(args: argparse.Namespace) -> tuple[TracedLLM, Tracer]:
     options = {"max_tokens": args.max_tokens, "prompt_style": args.prompt_style}
     if args.llm == "compat":
-        options.update(base_url=args.base_url, model=args.model, min_interval=args.min_interval)
+        options.update(
+            base_url=args.base_url, model=args.model, min_interval=args.min_interval,
+            timeout=args.timeout,
+        )
         if args.extra_body:
             options["extra_body"] = args.extra_body
         if args.system_prompt:
@@ -161,6 +169,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-tokens", type=int, default=2048, help="más con modelos de razonamiento")
     p.add_argument("--prompt-style", choices=["schema", "example"], default="example")
     p.add_argument("--min-interval", type=float, default=0.0, help="segundos entre llamadas")
+    p.add_argument(
+        "--timeout", type=float, default=300.0,
+        help="segundos de espera por respuesta (solo compat; 600 para modelos lentos)",
+    )
     p.add_argument(
         "--extra-body", type=json.loads,
         help='JSON extra por petición, p. ej. \'{"reasoning_effort": "low"}\'',
