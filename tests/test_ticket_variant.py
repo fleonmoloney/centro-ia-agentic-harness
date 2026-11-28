@@ -13,7 +13,7 @@ from centro_harness.schemas import InstitutionalTicket, InstitutionalTicketNeutr
 @pytest.fixture(autouse=True)
 def _restore_variant():
     yield
-    evals._set_ticket_variant("standard")
+    evals._set_ticket_variant(evals.DEFAULT_TICKET_VARIANT)
 
 
 def test_neutral_description_drops_the_valid_check_digit_hint():
@@ -40,10 +40,11 @@ def test_both_variants_validate_identically(cls):
             cls.model_validate({**ok, "citizen_id": bad})
 
 
-def test_variant_is_selected_only_for_the_ticket_and_defaults_to_standard():
-    assert evals._schema_for("InstitutionalTicket") is InstitutionalTicket
-    evals._set_ticket_variant("neutral")
+def test_variant_is_selected_only_for_the_ticket_and_defaults_to_neutral():
+    assert evals.DEFAULT_TICKET_VARIANT == "neutral"
     assert evals._schema_for("InstitutionalTicket") is InstitutionalTicketNeutral
+    evals._set_ticket_variant("standard")
+    assert evals._schema_for("InstitutionalTicket") is InstitutionalTicket
     assert evals._schema_for("MedicalProtocol") is evals.SCHEMAS["MedicalProtocol"]
     with pytest.raises(ValueError):
         evals._set_ticket_variant("otra")
@@ -51,5 +52,7 @@ def test_variant_is_selected_only_for_the_ticket_and_defaults_to_standard():
 
 def test_cli_records_the_variant_in_the_report(tmp_path):
     out = tmp_path / "r.json"
-    evals.main(["--llm", "scripted", "--ticket-schema", "neutral", "--out-json", str(out)])
+    evals.main(["--llm", "scripted", "--out-json", str(out)])
     assert json.loads(out.read_text(encoding="utf-8"))["meta"]["ticket_schema"] == "neutral"
+    evals.main(["--llm", "scripted", "--ticket-schema", "standard", "--out-json", str(out)])
+    assert json.loads(out.read_text(encoding="utf-8"))["meta"]["ticket_schema"] == "standard"

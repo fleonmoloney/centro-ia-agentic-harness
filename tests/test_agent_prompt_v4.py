@@ -15,8 +15,8 @@ from centro_harness.llm import example_skeleton, schema_prompt
 from centro_harness.schemas import InstitutionalTicket, MedicalProtocol
 
 
-def test_protocol_is_v5():
-    assert PROTOCOL_VERSION == 5
+def test_protocol_is_v6():
+    assert PROTOCOL_VERSION == 6
 
 
 def test_agent_skeleton_shows_arguments_as_object_and_alternatives():

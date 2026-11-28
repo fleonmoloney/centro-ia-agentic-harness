@@ -61,7 +61,7 @@ que revenden acceso: tus prompts pasan por un intermediario desconocido.
 
 | Flag | Para qué |
 |---|---|
-| `--ticket-schema neutral` | EXPERIMENTO, no el protocolo: quita "con verificador válido" de la descripción de `citizen_id` (la validación es la misma). Sirve para separar "el modelo inventa" de "el prompt lo empuja a inventar"; queda en `meta.ticket_schema` y no se compara con los demás reportes |
+| `--ticket-schema {neutral,standard}` | `neutral` (por defecto, protocolo v6) describe `citizen_id` como "tal como figura en la consulta; vacío si no hay". `standard` pide una cédula "con verificador válido" (la validación es la misma) y es un EXPERIMENTO: algunos modelos recalculan el dígito o inventan una cédula. Queda en `meta.ticket_schema` y los reportes con variantes distintas no se comparan |
 | `--timeout 600` | Segundos de espera por respuesta (por defecto 120). Los modelos grandes de NVIDIA Build pueden tardar minutos en cola: con 120 s la ejecución se corta con `read operation timed out` y cuenta como error de infraestructura (excluida de las tasas) |
 | `--extra-body '{"reasoning_effort": "low"}'` | Suma campos JSON al cuerpo de cada petición (NVIDIA Build acepta `reasoning_effort`: none/low/high). No puede pisar `model` ni `messages`; queda en el reporte |
 | `--system-prompt "..."` | Mensaje de sistema fijo (solo `--llm compat`); queda en el reporte |

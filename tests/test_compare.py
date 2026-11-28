@@ -69,7 +69,7 @@ def test_reports_with_different_case_sets_are_not_contrasted(reports, tmp_path):
 def test_different_protocols_or_ticket_variants_are_not_contrasted(reports, tmp_path):
     for key, value, expected in (
         ("protocol_version", 99, "protocolo distinto"),
-        ("ticket_schema", "neutral", "variante de esquema distinto"),
+        ("ticket_schema", "experimental", "variante de esquema distinto"),
     ):
         data = json.loads(open(reports[0], encoding="utf-8").read())
         data["meta"][key] = value
@@ -78,3 +78,18 @@ def test_different_protocols_or_ticket_variants_are_not_contrasted(reports, tmp_
         altered.write_text(json.dumps(data), encoding="utf-8")
         text = compare([reports[1], str(altered)])
         assert expected in text
+
+
+def test_a_v5_neutral_report_is_comparable_with_v6_but_a_v5_standard_one_is_not(reports, tmp_path):
+    from centro_harness.compare import _why_not_comparable
+
+    def meta_of(path, **meta):
+        data = json.loads(open(path, encoding="utf-8").read())
+        data["meta"].update(meta)
+        return data
+
+    v6 = meta_of(reports[0], protocol_version=6, ticket_schema="neutral")
+    v5_neutral = meta_of(reports[1], protocol_version=5, ticket_schema="neutral")
+    v5_standard = meta_of(reports[1], protocol_version=5, ticket_schema="standard")
+    assert _why_not_comparable(v6, v5_neutral) is None
+    assert _why_not_comparable(v6, v5_standard) == "protocolo distinto"

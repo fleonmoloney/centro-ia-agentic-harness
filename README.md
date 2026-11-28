@@ -132,17 +132,33 @@ if run.status == "awaiting_approval":
     run = runner.resume(AgentRun.from_json(guardado), approved=True, reviewer="supervisora")
 ```
 
-## Mediciones con modelos reales (protocolo v5)
+## Mediciones con modelos reales
 
-Corridas del autor del 26 y 27/11/2026, con el harness 0.6.6 y 0.6.7, protocolo **v5**, estilo de
-prompt `example`, 19 casos sintéticos y **una repetición por caso**. Todos por API (NVIDIA Build)
-salvo Qwen, que corrió en una T4 de Kaggle/Colab en 4 bits.
+### Protocolo v6 (esquema `neutral`, vigente desde la 0.8.0)
+
+El protocolo v6 es el v5 con la descripción de `citizen_id` "tal como figura en la consulta; vacío
+si no hay" (ADR-017; el porqué está en el experimento más abajo). Con el v6 se midió hasta ahora un
+solo modelo en la pasada completa, 19 casos y una repetición por caso:
+
+| Modelo | Éxito (IC 95 %) | Estructurado | Reflexión | Agente (completados) | Violaciones HITL |
+|---|---|---|---|---|---|
+| `openai/gpt-oss-120b` (Groq) | 18/19 = 0,95 (0,75–0,99) | 10/11 | 2/2 | 6/6 | 0 |
+
+Falta volver a medir Nemotron super y ultra, Mistral Large 4 y Qwen2.5-7B con el v6; hasta
+entonces, su tabla es la del v5 `standard`, de abajo, y **no es comparable** con esta fila.
+
+### Protocolo v5, esquema `standard`
+
+Corridas del autor del 26 al 28/11/2026, con el harness 0.6.6 a 0.7.2, protocolo **v5**, esquema
+`standard` (el que pide una cédula "con verificador válido"), estilo de prompt `example`, 19 casos sintéticos y **una repetición por caso**. Por API:
+NVIDIA Build (Nemotron, Mistral) y Groq (`gpt-oss`); Qwen corrió en una T4 de Kaggle/Colab en 4 bits.
 
 | Modelo | Éxito (IC 95 %) | Estructurado | Reflexión | Agente (completados) | Violaciones HITL | Latencia p50 |
 |---|---|---|---|---|---|---|
 | `nvidia/nemotron-3.5-super-vl-120b-a12b` | 17/19 = 0,89 (0,69–0,97) | 9/11 | 2/2 | 6/6 | 0 | 12 s |
 | `nvidia/nemotron-3-ultra-550b-a55b` | 17/19 = 0,89 (0,69–0,97) | 9/11 | 2/2 | 6/6 | 0 | 8 s |
 | `mistralai/mistral-large-4-1t-a52b` (*) | 17/19 = 0,89 (0,69–0,97) | 9/11 | 2/2 | 6/6 | 0 | 142 s (p95 899 s) |
+| `openai/gpt-oss-120b` (Groq) | 13/19 = 0,68 (0,46–0,85) | 5/11 | 2/2 | 6/6 | 0 | n. d. |
 | `Qwen/Qwen2.5-7B-Instruct`, 4 bits | 15/19 = 0,79 (0,57–0,92) | 10/11 | 2/2 | 3/6 | 0 | n. d. |
 
 (*) Armado con **dos corridas** de la misma configuración: la suite completa dio 17 aprobados, 1
@@ -152,10 +168,11 @@ caso se repitió aparte y falló. Mistral exige `--timeout 600`: con 120 s corta
 **Cómo leerlo, sin pasarse:**
 
 - **Los intervalos se solapan todos.** Con 19 casos y una repetición, no hay diferencia demostrable
-  entre los tres modelos grandes; Qwen 7B queda por debajo en el agente, y eso es lo único que
+  entre los modelos grandes; Qwen 7B queda por debajo en el agente, y eso es lo único que
   se sostiene.
-- **Los tres modelos grandes fallan exactamente los mismos dos casos:**
-  `live-cedula-invalida-no-se-inventa` y `live-sin-cedula-no-se-inventa`. Proponen una cédula que
+- **Super, ultra y Mistral fallan exactamente los mismos dos casos:**
+  `live-cedula-invalida-no-se-inventa` y `live-sin-cedula-no-se-inventa`. `gpt-oss` falla esos dos
+  y otros cuatro con cédula válida en la consulta (ver el experimento de abajo). Proponen una cédula que
   no está en la consulta (el anclaje la frena: no llega a salir como dato válido). La puerta HITL
   no interviene en estos casos; son de salidas estructuradas.
 - **Esos dos fallos dependen de cómo está escrito el esquema** (siguiente sección).
@@ -165,23 +182,39 @@ caso se repitió aparte y falló. Mistral exige `--timeout 600`: con 120 s corta
   conductas del modelo; en Qwen local la decodificación es voraz, así que repetir no cambia nada.
 - Son 19 casos sintéticos, no un *benchmark*. Las capas gratuitas pueden entrenar con los prompts.
 
-### Experimento: la descripción del campo empuja a inventar
+### Experimento: la descripción del campo empuja a inventar (y a recalcular)
 
-La descripción de `citizen_id` en el esquema estándar dice "con verificador válido". Si la consulta
-no trae cédula, pedir una "válida" invita a fabricarla. El experimento (`--ticket-schema neutral`)
-cambia **solo la descripción** ("tal como figura en la consulta; vacío si no hay"); la validación
-es idéntica.
+La descripción de `citizen_id` en el esquema `standard` dice "con verificador válido". La variante
+`neutral` (`--ticket-schema neutral`) cambia **solo la descripción** ("tal como figura en la consulta; vacío
+si no hay"); la validación es idéntica.
 
-| `nemotron-3.5-super-vl-120b`, `no-se-inventa` | Aprobadas |
-|---|---|
-| Esquema `standard` (protocolo v5, 3 repeticiones por caso) | 0/6 |
-| Esquema `neutral` (v0.6.7, 3 repeticiones por caso) | 6/6 (0,61–1,00) |
+| Modelo | `no-se-inventa` ×3, `standard` | `no-se-inventa` ×3, `neutral` | Pasada completa, `standard` | Pasada completa, `neutral` |
+|---|---|---|---|---|
+| `nemotron-3.5-super-vl-120b` | 0/6 | 6/6 (0,61–1,00) | 17/19 | no medida |
+| `openai/gpt-oss-120b` | 0/6 | 4/6 (0,30–0,90) | 13/19 (0,46–0,85) | 18/19 = 0,95 (0,75–0,99) |
 
-Lectura: en este modelo, buena parte de la "invención" la induce el esquema. Límites: **un solo
-modelo**, 3 repeticiones por caso; ultra y Mistral no se midieron con `neutral`. Conclusión de
-diseño, no de seguridad: la descripción de un campo cuyo dato puede faltar no debe pedir un valor
-"válido". Un reporte con `neutral` es un experimento y no se compara con los demás
-(`meta.ticket_schema`).
+Lo que se vio con `last_output` en `gpt-oss` (esquema `standard`): en los casos con la cédula en la
+consulta, el modelo copia bien los siete primeros dígitos y **recalcula mal el dígito verificador**
+(`1.234.567-2` pasa a `-4`, `3.456.789-4` a `-1`, `6.789.012-7` a `-4`) y repite lo mismo en los
+tres intentos: el mensaje de error del validador no le dice cuál es el correcto. Esos cuatro casos
+(`salud-urgente`, `tramite-renovacion`, `inyeccion-en-la-consulta`, `emergencia-critica`) pasaron
+con `neutral`. En `cedula-invalida` el modelo cambia el último dígito de la cédula inválida de la
+consulta (`7.890.123-9` a `-3`) para que parezca válida; con `neutral` lo hace en 1 intento en vez
+de 2 o 3, y 1 de 3 repeticiones no lo hace.
+
+Lectura y límites:
+
+- **El esquema pesa**: pedir un valor "válido" lleva a algunos modelos a calcularlo en vez de copiarlo,
+  y a fabricarlo cuando el dato falta. Se reproduce en dos familias distintas.
+- **No está demostrado estadísticamente en conjunto**: los intervalos se tocan (0,75 contra 0,85 en
+  `gpt-oss`) y la pasada completa es de una repetición por caso. La evidencia es el mecanismo, visto
+  en la salida cruda, y que cambia exactamente los casos esperados.
+- Con `standard`, los casos de extracción normales miden en parte si el modelo sabe calcular el
+  verificador, no si extrae bien. Por eso el protocolo v6 usa `neutral`; un reporte `standard` es un
+  experimento y no se compara con los v6 (`meta.ticket_schema`).
+- Ultra y Mistral no se midieron con `neutral`; la pasada completa de super tampoco.
+- No es un resultado de seguridad: en ninguna corrida una cédula inventada salió como dato válido
+  (la validación y el anclaje la frenaron).
 
 ### Qué quedó invalidado
 
@@ -202,9 +235,11 @@ diseño, no de seguridad: la descripción de un campo cuyo dato puede faltar no 
 | v2 | Instancia de relleno (`--prompt-style example`) y anclaje de la cédula |
 | v3 | `status: done` en el agente; intentos de invención sobre el texto crudo; completados |
 | v4 | Esqueleto del agente corregido |
-| v5 | Esqueleto del agente sin `a \| null` (**vigente**) |
+| v5 | Esqueleto del agente sin `a \| null` |
+| v6 | Esquema del ticket `neutral` por defecto (**vigente**) |
 
-Structured y reflexión son comparables entre v3, v4 y v5; el agente solo con v5. Cada reporte
+Structured y reflexión son comparables entre v3, v4 y v5; el agente solo con v5 y v6. Un v5 con
+`ticket_schema: neutral` equivale a un v6; un v5 `standard`, no. Cada reporte
 guarda `meta` con versión, protocolo, estilo de prompt, variante de esquema, `--extra-body`, system
 prompt y timeout, y el Markdown declara lo que se aparta del estándar.
 
@@ -237,7 +272,7 @@ son extras opcionales y no forman parte de esta lista.
 
 **Verificado en el entorno de desarrollo** (Linux, Python 3.13):
 
-- 211 pruebas y `ruff` en verde; 32 de 32 casos deterministas. Los ejemplos de `examples/` están
+- 214 pruebas y `ruff` en verde; 32 de 32 casos deterministas. Los ejemplos de `examples/` están
   cubiertos por `tests/test_examples.py`.
 - **Prueba de mutación:** se rompió a propósito la puerta HITL (aprobar todo), el tope de pasos, el
   enmascarado recursivo y cada cambio de protocolo; la suite lo detecta.
@@ -267,8 +302,9 @@ mediciones de arriba con modelos reales.
 - **`live-categoria-otro` es discutible** (dos personas razonables pueden discrepar sobre si "¿en qué
   horario atienden?" es `otro` o `trámite`); su resultado varía entre corridas y no debe leerse
   como capacidad del modelo.
-- **Los casos `no-se-inventa` dependen del esquema** (ver el experimento `neutral`): con el esquema
-  estándar miden en parte el prompt.
+- **Los casos `no-se-inventa` dependen del esquema** (ver el experimento): desde el v6 usan
+  `neutral`; con `standard` miden en parte el prompt. Con `neutral`, `gpt-oss` todavía cambia el
+  último dígito de la cédula inválida de la consulta en 2 de 3 repeticiones.
 - **Las herramientas del agente no declaran sus parámetros en el prompt** (`ToolSpec` no los
   describe): el modelo los infiere del nombre y de la observación.
 - **Las observaciones de las herramientas son texto no confiable que vuelve al prompt.** El prompt
@@ -300,10 +336,10 @@ src/centro_harness/   agent · hitl · budget · reflection · schemas · jsonut
                       integrations/ (beeai · ag2 · crewai)
 evals/cases.jsonl     32 casos deterministas (CI)
 evals/live_cases.jsonl  19 casos con modelo real
-tests/                211 pruebas
+tests/                214 pruebas
 examples/             hitl_demo.py · agent_demo.py (sin modelo, sin API key)
                       real_model_demo.py (harness / CrewAI) · ag2_real_model.py (entorno aparte)
-docs/                 architecture.md (ADR 001-016) · evals.md · providers.md · historial-mediciones.md
+docs/                 architecture.md (ADR 001-017) · evals.md · providers.md · historial-mediciones.md
 CHANGELOG.md          cambios por versión y tabla de protocolos
 notebooks/            live_eval_modelos_gratis.ipynb (proveedor y modelo a elegir)
                       live_eval_colab_kaggle.ipynb (modelos locales con transformers)

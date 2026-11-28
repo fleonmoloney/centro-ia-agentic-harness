@@ -4,6 +4,23 @@ Formato: una sección por versión, de la más nueva a la más vieja. Antes de l
 cambiar entre versiones menores; lo que sí se anota siempre es cuándo cambia el **protocolo de
 medición**, porque los números de un protocolo no se comparan con los de otro (ver la tabla al final).
 
+## 0.8.0 (28/11/2026) · protocolo v6
+
+- **El esquema del ticket `neutral` pasa a ser el protocolo** (ADR-017). Con "con verificador válido"
+  en la descripción de `citizen_id`, `gpt-oss-120b` recalculaba mal el dígito verificador y fallaba
+  4 casos de extracción con cédula válida (13/19; con `neutral`, 18/19), y super inventaba la cédula
+  cuando faltaba (0/6; con `neutral`, 6/6).
+- `--ticket-schema standard` queda como experimento y el reporte lo declara. Los reportes sin la
+  clave (anteriores a la 0.6.4) se leen como `standard`.
+- `harness-compare` trata un reporte v5 con `ticket_schema: neutral` como equivalente a un v6.
+- Los números de v3 a v5 con `standard` no son comparables con los del v6.
+
+## 0.7.3 (28/11/2026)
+
+- README: mediciones de `openai/gpt-oss-120b` (Groq) con los esquemas `standard` y `neutral`.
+  Con `standard` recalcula mal el dígito verificador de la cédula de la consulta en 4 casos que
+  los otros modelos pasan; con `neutral`, 18/19. Sin cambios de código ni de protocolo.
+
 ## 0.7.2 (27/11/2026)
 
 - `OpenAICompatLLM` envía `User-Agent: centro-ia-agentic-harness/<versión>`. Groq (por Cloudflare)
@@ -105,5 +122,6 @@ medición**, porque los números de un protocolo no se comparan con los de otro 
 | v3 | 0.6.0 | `status: done` en agente, intentos de invención, completados | structured y reflection con v4 y v5 |
 | v4 | 0.6.2 | prompt del agente corregido | structured y reflection con v3 y v5 |
 | v5 | 0.6.5 | esqueleto del agente sin `a \| null` | todo, con v5; structured y reflection también con v3 y v4 |
+| v6 | 0.8.0 | esquema del ticket `neutral` por defecto | con v6 y con v5 `neutral`; no con los v3 a v5 `standard` |
 
-Un reporte con `meta.ticket_schema` distinto de `standard` es un experimento y no se compara con los demás.
+Desde el v6, un reporte con `meta.ticket_schema` distinto de `neutral` es un experimento y no se compara con los demás.
