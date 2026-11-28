@@ -185,3 +185,20 @@ respuesta final>`) y un test impide `|` en esos valores. Protocolo v5.
 **Costos y límites:** el cambio solo toca el prompt del agente; los resultados de agente del v4 (ultra
 6/6, Qwen 4/6) hay que repetirlos con el v5. No se agregó tolerancia en el validador (aceptar
 `herramienta | null`) para no medir una salida que el modelo no dio bien.
+
+## ADR-017: Protocolo v6, esquema del ticket `neutral` por defecto (v0.8.0)
+
+**Contexto:** la descripción de `citizen_id` decía "con verificador válido". Con `gpt-oss-120b`,
+ese texto hacía que el modelo recalculara el dígito verificador en vez de copiarlo de la consulta
+(`1.234.567-2` pasaba a `-4`) y fallaba cuatro casos de extracción con cédula válida; con super,
+llevaba a inventar una cédula cuando la consulta no traía ninguna. Con la variante `neutral`
+(descripción "tal como figura en la consulta; vacío si no hay", misma validación) `gpt-oss` pasó de
+13/19 a 18/19 y super de 0/6 a 6/6 en `no-se-inventa`.
+**Decisión:** el protocolo v6 usa `neutral` por defecto. `--ticket-schema standard` queda como
+experimento ("esquema con presión"). Un reporte v5 con `ticket_schema: neutral` mide lo mismo que
+uno v6 y `harness-compare` los trata como comparables; un v5 `standard` no.
+**Costos y límites:** los números de los protocolos v3 a v5 con `standard` no son comparables con
+los del v6; falta volver a medir ultra, Mistral y Qwen con `neutral`. La evidencia sale de dos
+modelos con una repetición por caso en la pasada completa: es el mecanismo, visto en la salida
+cruda, y no una diferencia estadística. El esquema `InstitutionalTicket` de producción conserva su
+descripción original: el cambio es de la medición, no del dominio.

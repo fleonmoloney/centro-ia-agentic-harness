@@ -43,6 +43,14 @@ def _overlap(a: list[float] | None, b: list[float] | None) -> bool:
     return bool(a and b and a[0] <= b[1] and b[0] <= a[1])
 
 
+def _effective_protocol(meta: dict):
+    """Un reporte v5 con esquema `neutral` mide lo mismo que uno v6 (ADR-017)."""
+    protocol = meta.get("protocol_version")
+    if protocol == 5 and meta.get("ticket_schema") == "neutral":
+        return 6
+    return protocol
+
+
 def _why_not_comparable(a: dict, b: dict) -> str | None:
     """Motivo por el que dos reportes no se pueden contrastar con intervalos, o None si sí.
 
@@ -52,8 +60,9 @@ def _why_not_comparable(a: dict, b: dict) -> str | None:
     if set(a["summary"]["per_case"]) != set(b["summary"]["per_case"]):
         return "casos distintos"
     ma, mb = a["meta"], b["meta"]
+    if _effective_protocol(ma) != _effective_protocol(mb):
+        return "protocolo distinto"
     for key, label, default in (
-        ("protocol_version", "protocolo", None),
         ("ticket_schema", "variante de esquema", "standard"),
         ("prompt_style", "estilo de prompt", None),
     ):
@@ -93,7 +102,7 @@ def compare(paths: list[str]) -> str:
     notes = []
     case_sets = {tuple(sorted(r["summary"]["per_case"])) for _, r in reports}
     repeats = {r["meta"].get("repeats") for _, r in reports}
-    protocols = {r["meta"].get("protocol_version") for _, r in reports}
+    protocols = {_effective_protocol(r["meta"]) for _, r in reports}
     if len(protocols) > 1:
         notes.append(
             f"Protocolos distintos entre reportes ({sorted(map(str, protocols))}): los números de "

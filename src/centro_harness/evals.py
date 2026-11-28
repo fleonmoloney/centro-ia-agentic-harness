@@ -71,15 +71,20 @@ TRUNCATION_FAILS_FROM = 4096
 # agente (el esqueleto mostraba `arguments` como texto y `tool` y `final_answer` a la vez). v5:
 # el esqueleto del agente deja de usar `a | null` (Qwen 7B copiaba "herramienta | null"). Los
 # prompts de structured y reflection son idénticos a v3. Los números de un protocolo no se
-# comparan con los de otro, salvo structured y reflection entre v3, v4 y v5.
-PROTOCOL_VERSION = 5
+# comparan con los de otro, salvo structured y reflection entre v3, v4 y v5. v6: igual que v5 pero
+# el esquema del ticket es `neutral` por defecto (ADR-017): con "con verificador válido" en la
+# descripción de `citizen_id`, algunos modelos recalculan el dígito verificador en vez de copiarlo.
+# Un reporte v5 con `ticket_schema: neutral` equivale a uno v6.
+PROTOCOL_VERSION = 6
 
 SCHEMAS = {"InstitutionalTicket": InstitutionalTicket, "MedicalProtocol": MedicalProtocol}
 
-# Variantes de esquema para medir confusores del prompt. NO son el protocolo: un reporte con
-# variante distinta de "standard" no se compara con los del protocolo (`meta.ticket_schema`).
+# Variantes de esquema del ticket. Desde el v6 el protocolo es "neutral"; "standard" (con
+# "verificador válido" en la descripción) es un experimento y no se compara con los del protocolo
+# (`meta.ticket_schema`).
 TICKET_VARIANTS = {"standard": InstitutionalTicket, "neutral": InstitutionalTicketNeutral}
-_ticket_variant = "standard"
+DEFAULT_TICKET_VARIANT = "neutral"
+_ticket_variant = DEFAULT_TICKET_VARIANT
 
 
 def _set_ticket_variant(name: str) -> None:
@@ -728,8 +733,8 @@ def exit_code(summary: dict, mode: str, min_pass_rate: float | None) -> int:
 def _config_line(meta: dict) -> str:
     """Opciones fuera del protocolo estándar, para que un reporte pegado se explique solo."""
     parts = []
-    if (meta.get("ticket_schema") or "standard") != "standard":
-        variante = meta["ticket_schema"]
+    variante = meta.get("ticket_schema") or "standard"  # sin la clave: reporte anterior a la 0.6.4
+    if variante != DEFAULT_TICKET_VARIANT:
         parts.append(f"variante de esquema `{variante}` (experimento, no es el protocolo)")
     if meta.get("extra_body"):
         parts.append(f"extra-body `{json.dumps(meta['extra_body'], ensure_ascii=False)}`")
@@ -804,9 +809,9 @@ def main(argv: list[str] | None = None) -> int:
         "lento corta con 'read operation timed out': error de infraestructura, no del modelo",
     )  # fmt: skip
     parser.add_argument(
-        "--ticket-schema", choices=sorted(TICKET_VARIANTS), default="standard",
-        help="Variante del esquema del ticket: 'neutral' quita 'con verificador válido' de la "
-        "descripción de citizen_id (misma validación). Es un experimento, no el protocolo",
+        "--ticket-schema", choices=sorted(TICKET_VARIANTS), default=DEFAULT_TICKET_VARIANT,
+        help="Variante del esquema del ticket (por defecto 'neutral', el protocolo v6). 'standard' "
+        "pide una cédula 'con verificador válido': experimento, empuja a recalcular el dígito",
     )  # fmt: skip
     parser.add_argument("--repeats", type=int, default=1, help="Repeticiones por caso (live)")
     parser.add_argument("--min-pass-rate", type=float, help="Falla (código 1) si queda por debajo")
