@@ -4,6 +4,13 @@ Formato: una sección por versión, de la más nueva a la más vieja. Antes de l
 cambiar entre versiones menores; lo que sí se anota siempre es cuándo cambia el **protocolo de
 medición**, porque los números de un protocolo no se comparan con los de otro (ver la tabla al final).
 
+## 0.7.2 (27/11/2026)
+
+- `OpenAICompatLLM` envía `User-Agent: centro-ia-agentic-harness/<versión>`. Groq (por Cloudflare)
+  respondía `HTTP 403 ... error code: 1010` al `Python-urllib` por defecto, así que ninguna corrida
+  contra Groq funcionaba. Test con un servidor HTTP real y prueba de mutación.
+- Notebook: el catálogo en vivo también manda `User-Agent`.
+
 ## 0.7.1 (27/11/2026)
 
 - `examples/real_model_demo.py`: `--timeout` (300 s por defecto; antes eran 120 s y NVIDIA Build cortaba

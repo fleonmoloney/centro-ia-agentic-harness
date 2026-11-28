@@ -189,6 +189,15 @@ class ScriptedLLM:
         return schema.model_validate(item)
 
 
+def _user_agent() -> str:
+    try:
+        from importlib.metadata import version
+
+        return f"centro-ia-agentic-harness/{version('centro-ia-agentic-harness')}"
+    except Exception:  # noqa: BLE001 - sin metadatos de instalación: igual se identifica
+        return "centro-ia-agentic-harness"
+
+
 class OpenAICompatLLM:
     """Cliente de la API `/chat/completions`, sin dependencias externas (solo biblioteca estándar).
 
@@ -279,7 +288,8 @@ class OpenAICompatLLM:
 
     def _post(self, payload: dict) -> dict:
         url = f"{self.base_url}/chat/completions"
-        headers = {"Content-Type": "application/json"}
+        # Groq (Cloudflare) rechaza con 403 "error code: 1010" el User-Agent por defecto de urllib.
+        headers = {"Content-Type": "application/json", "User-Agent": _user_agent()}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         data = json.dumps(payload).encode("utf-8")

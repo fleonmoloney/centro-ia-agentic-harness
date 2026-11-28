@@ -31,7 +31,12 @@ class _Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         srv = self.server
         srv.requests.append(
-            {"path": self.path, "body": body, "auth": self.headers.get("Authorization")}
+            {
+                "path": self.path,
+                "body": body,
+                "auth": self.headers.get("Authorization"),
+                "agent": self.headers.get("User-Agent"),
+            }
         )
         status, payload = srv.script.pop(0) if len(srv.script) > 1 else srv.script[0]
         raw = payload if isinstance(payload, str) else json.dumps(payload)
@@ -190,3 +195,12 @@ def test_failed_structured_case_reports_why_and_what_the_model_said():
     assert res.status == "fail"
     assert "Claro, acá tenés" in res.actual["last_output"]
     assert res.actual["last_error"]
+
+
+def test_sends_its_own_user_agent_not_the_urllib_default(serve):
+    # Groq (Cloudflare) devuelve 403 "error code: 1010" al User-Agent "Python-urllib/x".
+    url, srv = serve([(200, chat("hola"))])
+    _llm(url).generate("saludá")
+    agent = srv.requests[0]["agent"]
+    assert agent.startswith("centro-ia-agentic-harness")
+    assert "urllib" not in agent
